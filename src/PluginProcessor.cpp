@@ -1,6 +1,9 @@
 #include "PluginProcessor.h"
 
+#ifndef DEFEEDBACK_HEADLESS
 #include "PluginEditor.h"
+#endif
+
 #include "state/StateIO.h"
 
 #include <cmath>
@@ -325,7 +328,11 @@ void DeFeedbackProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
 
 juce::AudioProcessorEditor* DeFeedbackProcessor::createEditor()
 {
+#ifndef DEFEEDBACK_HEADLESS
     return new DeFeedbackEditor (*this);
+#else
+    return nullptr; // headless test build
+#endif
 }
 
 void DeFeedbackProcessor::getStateInformation (juce::MemoryBlock& destData)

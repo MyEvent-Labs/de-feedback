@@ -15,7 +15,8 @@ int main()
         defeedback::tests::detectorTests(),
         defeedback::tests::notchBankTests(),
         defeedback::tests::stateTests(),
-        defeedback::tests::regressionTests()
+        defeedback::tests::regressionTests(),
+        defeedback::tests::processorTests()
     };
 
     runner.runTests (tests);

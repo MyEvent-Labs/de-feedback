@@ -34,7 +34,13 @@ See [`docs/ALPHA_LIMITATIONS.md`](docs/ALPHA_LIMITATIONS.md).
   5 -> 0, with no loss of feedback-onset detection.
 - Front-end metering: input/output **peak, RMS and peak-hold** meters, a
   dedicated **gain-reduction** meter, and a live **active-notch list** showing
-  each notch's frequency and reduction depth.
+  each notch's frequency and reduction depth. Input and Output trim are now on
+  the always-visible front panel (they were hidden in Advanced), so turning a
+  knob always has an audible effect. A **CLEAN / PROTECTING** status readout
+  makes it obvious when the suppressor is actually acting.
+- Added a headless processor build and unit tests for the parameter -> audio
+  path (input trim, output trim, strength/notch depth, bypass), so the controls
+  are regression-tested rather than assumed.
 - Added `tools/quality`, an objective scenario harness (detection latency and
   depth, harmonic distortion, false positives on clean music/speech, stereo
   identity, CPU) that runs as a CI gate via `--gate`. Coverage now includes a

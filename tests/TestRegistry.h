@@ -10,5 +10,6 @@ juce::UnitTest* detectorTests();
 juce::UnitTest* notchBankTests();
 juce::UnitTest* stateTests();
 juce::UnitTest* regressionTests();
+juce::UnitTest* processorTests();
 
 } // namespace defeedback::tests

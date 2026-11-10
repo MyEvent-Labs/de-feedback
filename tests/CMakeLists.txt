@@ -8,9 +8,12 @@ target_sources(defeedback_tests PRIVATE
     unit/DetectorTests.cpp
     unit/NotchBankTests.cpp
     unit/StateTests.cpp
-    dsp/RegressionTests.cpp)
+    dsp/RegressionTests.cpp
+    processor/ProcessorTests.cpp)
 
 target_include_directories(defeedback_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_link_libraries(defeedback_tests PRIVATE defeedback_processor)
 
 target_link_libraries(defeedback_tests
     PRIVATE

@@ -126,6 +126,13 @@ void SpectrumView::paint (juce::Graphics& g)
         g.setColour (Palette::warning.withAlpha (0.35f));
         g.fillRect (plot.getX(), plot.getY(), w * juce::jlimit (0.0f, 1.0f, risk), 3.0f);
     }
+
+    // Protection status: makes it obvious when the unit is actually acting.
+    g.setFont (juce::Font (juce::FontOptions (11.0f, juce::Font::bold)));
+    g.setColour (active > 0 ? Palette::warning : Palette::accent);
+    g.drawText (active > 0 ? ("PROTECTING  " + juce::String (active)) : "CLEAN",
+                getLocalBounds().reduced (10, 6).removeFromTop (14),
+                juce::Justification::centredRight, false);
 }
 
 } // namespace defeedback

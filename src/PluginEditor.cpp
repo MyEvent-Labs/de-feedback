@@ -124,9 +124,9 @@ void DeFeedbackEditor::rebuildAdvanced()
     const bool show = advancedVisible_;
 
     for (auto* c : { (juce::Component*) &minFreqSlider_, (juce::Component*) &maxFreqSlider_, (juce::Component*) &maxNotchesSlider_,
-                     (juce::Component*) &qBiasSlider_, (juce::Component*) &inputTrimSlider_, (juce::Component*) &outputTrimSlider_,
+                     (juce::Component*) &qBiasSlider_,
                      (juce::Component*) &minFreqLabel_, (juce::Component*) &maxFreqLabel_, (juce::Component*) &maxNotchesLabel_,
-                     (juce::Component*) &qBiasLabel_, (juce::Component*) &inputTrimLabel_, (juce::Component*) &outputTrimLabel_,
+                     (juce::Component*) &qBiasLabel_,
                      (juce::Component*) &stereoLinkButton_ })
         c->setVisible (show);
 }
@@ -217,7 +217,7 @@ void DeFeedbackEditor::resized()
     advancedButton_.setBounds (buttonArea.removeFromTop (36).reduced (0, 3));
 
     auto knobRow = controls.reduced (10, 0);
-    const int knobW = juce::jmax (64, knobRow.getWidth() / 4);
+    const int knobW = juce::jmax (56, knobRow.getWidth() / 6);
 
     auto placeKnob = [&] (juce::Slider& slider, juce::Label& label)
     {
@@ -226,10 +226,14 @@ void DeFeedbackEditor::resized()
         slider.setBounds (col);
     };
 
+    // Front panel carries the always-audible trims alongside the suppressor
+    // controls, so turning a knob always has an audible effect.
     placeKnob (strengthSlider_, strengthLabel_);
     placeKnob (sensitivitySlider_, sensitivityLabel_);
     placeKnob (maxCutSlider_, maxCutLabel_);
     placeKnob (recoverySlider_, recoveryLabel_);
+    placeKnob (inputTrimSlider_, inputTrimLabel_);
+    placeKnob (outputTrimSlider_, outputTrimLabel_);
 
     if (advancedVisible_)
     {
@@ -251,9 +255,7 @@ void DeFeedbackEditor::resized()
         placeAdv (left, maxFreqSlider_, maxFreqLabel_, left.getWidth() / 2);
         placeAdv (left, maxNotchesSlider_, maxNotchesLabel_, left.getWidth());
 
-        placeAdv (right, qBiasSlider_, qBiasLabel_, right.getWidth() / 3);
-        placeAdv (right, inputTrimSlider_, inputTrimLabel_, right.getWidth() / 2);
-        placeAdv (right, outputTrimSlider_, outputTrimLabel_, right.getWidth());
+        placeAdv (right, qBiasSlider_, qBiasLabel_, right.getWidth() / 2);
 
         stereoLinkButton_.setBounds (adv.getX() + 4, adv.getBottom() - 10, 140, 20);
     }

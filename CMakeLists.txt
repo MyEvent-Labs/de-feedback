@@ -97,6 +97,23 @@ target_link_libraries(DeFeedback
 juce_generate_juce_header(DeFeedback)
 
 # ---------------------------------------------------------------------------
+# Headless processor build (no editor) so the parameter -> audio path can be
+# unit-tested offline.
+# ---------------------------------------------------------------------------
+add_library(defeedback_processor STATIC src/PluginProcessor.cpp)
+target_include_directories(defeedback_processor PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(defeedback_processor
+    PUBLIC
+        defeedback_core
+        juce::juce_audio_processors
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_warning_flags)
+target_compile_definitions(defeedback_processor
+    PUBLIC
+        DEFEEDBACK_HEADLESS=1
+        JucePlugin_Name="MyEvent Labs De-Feedback")
+
+# ---------------------------------------------------------------------------
 # Tests and tools
 # ---------------------------------------------------------------------------
 if(DE_FEEDBACK_BUILD_TESTS)
