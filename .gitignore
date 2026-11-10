@@ -41,3 +41,4 @@ desktop.ini
 # Local overrides
 .env
 .env.local
+/rebuild.bat

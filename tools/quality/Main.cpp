@@ -271,7 +271,7 @@ namespace
             const double depth = toneDb - outDb;
             const double h2 = 20.0 * std::log10 (juce::jmax (1.0e-12, binMag (r.left, freq * 2.0, from, to))) - toneDb;
 
-            const bool pass = r.finite && latency >= 0.0 && latency < 2.5 && depth > 3.0 && h2 < -40.0;
+            const bool pass = r.finite && latency >= 0.0 && latency < 0.40 && depth > 3.0 && h2 < -40.0;
             report ("feedback_onset_" + tag + "_" + juce::String (juce::roundToInt (freq)) + "Hz",
                     pass,
                     "lat=" + juce::String (latency, 2) + "s depth=" + juce::String (depth, 1)

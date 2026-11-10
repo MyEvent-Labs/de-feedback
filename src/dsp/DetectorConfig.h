@@ -12,7 +12,7 @@ struct DetectorConfig
 {
     // Analysis resolution.
     int   fftOrder            = 11;      // 2048-point FFT
-    int   overlapFactor       = 2;       // 50% overlap (hop = fftSize/2)
+    int   overlapFactor       = 4;       // 75% overlap (hop = fftSize/4)
 
     // Frequency region of interest.
     float minFrequencyHz      = 80.0f;
