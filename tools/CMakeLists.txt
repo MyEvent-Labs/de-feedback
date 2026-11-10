@@ -49,3 +49,20 @@ target_compile_definitions(defeedback_analyze PRIVATE
     JUCE_STANDALONE_APPLICATION=1
     JUCE_USE_CURL=0
     JUCE_WEB_BROWSER=0)
+
+juce_add_console_app(defeedback_quality
+    PRODUCT_NAME "De-Feedback Quality Harness")
+
+target_sources(defeedback_quality PRIVATE quality/Main.cpp)
+
+target_link_libraries(defeedback_quality
+    PRIVATE
+        defeedback_core
+        juce::juce_dsp
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_warning_flags)
+
+target_compile_definitions(defeedback_quality PRIVATE
+    JUCE_STANDALONE_APPLICATION=1
+    JUCE_USE_CURL=0
+    JUCE_WEB_BROWSER=0)

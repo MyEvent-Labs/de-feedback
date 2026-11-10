@@ -41,9 +41,12 @@ struct DetectorConfig
     // Growth rate damping: a peak that is not growing is less likely feedback.
     float growthWeight        = 0.35f;
 
-    // Harmonicity: penalise tones that look like a harmonic series.
+    // Harmonicity: penalise tones that look like a harmonic series. A relative
+    // only counts if it is within this window of the peak's own level, so weak
+    // noise peaks cannot masquerade as harmonics of a real tone.
     float harmonicityPenalty  = 0.45f;
-    float harmonicTolerance   = 0.04f;   // relative frequency tolerance
+    float harmonicTolerance   = 0.05f;   // relative frequency tolerance
+    float harmonicWindowDb    = 15.0f;
 
     // Ignore bins very close to DC / Nyquist.
     int   guardBins           = 2;

@@ -255,16 +255,28 @@ void DeFeedbackProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
 
     // Publish meters / notch display.
     {
-        float dryPeak = 0.0f;
-        float wetPeak = 0.0f;
+        float dryPeak = 0.0f, wetPeak = 0.0f;
+        double drySum = 0.0, wetSum = 0.0;
+
         for (int ch = 0; ch < numCh; ++ch)
         {
-            dryPeak = juce::jmax (dryPeak, juce::FloatVectorOperations::findMaximum (dryBuffer_.data() + (size_t) (ch * numSamples), numSamples));
-            wetPeak = juce::jmax (wetPeak, juce::FloatVectorOperations::findMaximum (buffer.getReadPointer (ch), numSamples));
+            const float* d = dryBuffer_.data() + (size_t) (ch * numSamples);
+            const float* w = buffer.getReadPointer (ch);
+
+            for (int n = 0; n < numSamples; ++n)
+            {
+                dryPeak = juce::jmax (dryPeak, std::abs (d[n]));
+                wetPeak = juce::jmax (wetPeak, std::abs (w[n]));
+                drySum += (double) d[n] * d[n];
+                wetSum += (double) w[n] * w[n];
+            }
         }
 
+        const double count = (double) juce::jmax (1, numCh * numSamples);
         ui_.inputLevelDb.store (juce::Decibels::gainToDecibels (dryPeak, -100.0f));
         ui_.outputLevelDb.store (juce::Decibels::gainToDecibels (wetPeak, -100.0f));
+        ui_.inputRmsDb.store (juce::Decibels::gainToDecibels ((float) std::sqrt (drySum / count), -100.0f));
+        ui_.outputRmsDb.store (juce::Decibels::gainToDecibels ((float) std::sqrt (wetSum / count), -100.0f));
     }
 
     const int active = bank_.getActiveCount();
@@ -277,6 +289,7 @@ void DeFeedbackProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
 
     {
         NotchInfo info;
+        float reduction = 0.0f;
         const int displayCount = juce::jmin (UiSnapshot::kMaxNotchDisplay, bank_.getActiveCount());
         for (int i = 0; i < displayCount; ++i)
         {
@@ -285,8 +298,11 @@ void DeFeedbackProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
                 ui_.notchFreq[i].store (info.frequencyHz);
                 ui_.notchGain[i].store (info.gainDb);
                 ui_.notchQ[i].store (info.q);
+                reduction = juce::jmax (reduction, std::abs (info.gainDb));
             }
         }
+
+        ui_.reductionDb.store (reduction);
         for (int i = displayCount; i < UiSnapshot::kMaxNotchDisplay; ++i)
         {
             ui_.notchFreq[i].store (0.0f);

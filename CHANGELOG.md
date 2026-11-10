@@ -24,6 +24,21 @@ All notable changes to De-Feedback are documented here. This project adheres to
 ### Known limitations
 See [`docs/ALPHA_LIMITATIONS.md`](docs/ALPHA_LIMITATIONS.md).
 
+### Changed
+- Detector harmonicity is now scored in a second pass over *all* frame peaks
+  (previously it only saw peaks found so far, so a fundamental never saw its
+  own harmonics) and matches any small-integer frequency ratio, not just
+  integer multiples (so odd-harmonic subsets are still recognised as harmonic).
+  A relative must also be within 15 dB of the peak to count. Measured on a
+  clean musical passage under the Conservative profile: false-positive notches
+  5 -> 0, with no loss of feedback-onset detection.
+- Front-end metering: input/output **peak, RMS and peak-hold** meters, a
+  dedicated **gain-reduction** meter, and a live **active-notch list** showing
+  each notch's frequency and reduction depth.
+- Added `tools/quality`, an objective scenario harness (detection latency and
+  depth, harmonic distortion, false positives on clean music/speech, stereo
+  identity, CPU) that runs as a CI gate via `--gate`.
+
 ### Fixed
 - **Stereo harmonic distortion and a weak notch (root cause of the audible
   high-frequency grit).** In linked stereo the adaptive bank drove both

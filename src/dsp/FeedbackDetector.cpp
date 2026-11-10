@@ -223,12 +223,6 @@ void FeedbackDetector::analyseFrame (int channel, int frameIndex) noexcept
         const float prom = juce::jlimit (0.0f, 1.0f,
             (prominence - config_.minProminenceDb) / juce::jmax (1.0f, config_.strongProminenceDb - config_.minProminenceDb));
 
-        const float harmonic = harmonicityFactor (b, channel);
-
-        float inst = 0.5f * prom + 0.3f * narrow + 0.2f * growth;
-        inst *= harmonic;
-        inst = juce::jlimit (0.0f, 1.0f, inst);
-
         const float q = juce::jlimit (config_.minQ, config_.maxQ,
             (float) b / juce::jmax (1.0f, widthBins));
 
@@ -239,8 +233,20 @@ void FeedbackDetector::analyseFrame (int channel, int frameIndex) noexcept
         fp.magDb        = mag;
         fp.prominenceDb = prominence;
         fp.q            = q;
-        fp.inst         = inst;
+        fp.prom01       = prom;
+        fp.narrow01     = narrow;
+        fp.growth01     = growth;
         framePeaks_.push_back (fp);
+    }
+
+    // Second pass: score harmonicity against the COMPLETE set of frame peaks.
+    // (Scoring while peaks are still being collected meant a fundamental never
+    // saw its own harmonics, so harmonic musical notes were not discounted.)
+    for (auto& fp : framePeaks_)
+    {
+        const float harmonic = harmonicityFactor (fp.bin, channel);
+        fp.inst = juce::jlimit (0.0f, 1.0f,
+            (0.5f * fp.prom01 + 0.3f * fp.narrow01 + 0.2f * fp.growth01) * harmonic);
     }
 
     std::copy (magDb_.begin(), magDb_.end(), prevMagDb_.begin());
@@ -270,50 +276,66 @@ float FeedbackDetector::harmonicityFactor (int peakBin, int channel) const noexc
     if (f0 <= 0.0f)
         return 1.0f;
 
-    const int peers = 8;
+    constexpr int kMaxHarmonic = 12;
     int relatives = 0;
     int strongPeaks = 0;
 
     for (const auto& fp : framePeaks_)
     {
-        if (fp.bin == peakBin)
+        if (fp.bin == peakBin || fp.prominenceDb < config_.minProminenceDb)
             continue;
+
+        // Ignore the immediate skirt of this peak.
+        if (std::abs (fp.bin - peakBin) < 2)
+            continue;
+
+        // Only a relative close in level to the peak counts at all; weak noise
+        // peaks must not be mistaken for a harmonic series. Both the harmonic
+        // count and its denominator use this comparable-level set.
+        if (fp.magDb < magDb_[(size_t) peakBin] - config_.harmonicWindowDb)
+            continue;
+
+        ++strongPeaks;
 
         const float f = binToHz (fp.bin, sampleRate_, fftSize_);
         if (f <= 0.0f)
             continue;
 
-        if (fp.prominenceDb >= config_.minProminenceDb)
-            ++strongPeaks;
-
+        // Any small-integer ratio counts, not just integer multiples: a
+        // partial harmonic subset (e.g. odd harmonics of a note) is still a
+        // harmonic series and must be discounted.
         const float ratio = f / f0;
-        for (int k = 2; k <= peers; ++k)
+        bool related = false;
+        for (int p = 1; p <= kMaxHarmonic && ! related; ++p)
         {
-            const float near = (float) k;
-            if (std::abs (ratio - near) <= config_.harmonicTolerance * near
-                && fp.prominenceDb >= config_.minProminenceDb * 1.5f)
+            for (int q = 1; q <= kMaxHarmonic; ++q)
             {
-                ++relatives;
-                break;
-            }
+                if (p == q)
+                    continue;
 
-            const float sub = 1.0f / (float) k;
-            if (std::abs (ratio - sub) <= config_.harmonicTolerance
-                && fp.prominenceDb >= config_.minProminenceDb * 1.5f)
-            {
-                ++relatives;
-                break;
+                const float rr = (float) p / (float) q;
+                if (std::abs (ratio - rr) <= config_.harmonicTolerance * rr)
+                {
+                    related = true;
+                    break;
+                }
             }
         }
+
+        if (related)
+            ++relatives;
     }
 
     (void) channel;
 
-    if (strongPeaks < 2 || relatives == 0)
+    // Leave a tone with at most one harmonic relative alone (it could be
+    // feedback); discount a richer harmonic series hard, as musical notes and
+    // voiced speech are harmonic.
+    if (strongPeaks < 2 || relatives < 2)
         return 1.0f;
 
-    const float frac = juce::jlimit (0.0f, 1.0f, (float) relatives / (float) peers);
-    return juce::jlimit (0.1f, 1.0f, 1.0f - config_.harmonicityPenalty * frac);
+    const float frac = juce::jlimit (0.0f, 1.0f, (float) relatives / (float) strongPeaks);
+    return juce::jlimit (0.1f, 1.0f, 1.0f - config_.harmonicityPenalty * frac * 1.5f);
 }
 
 void FeedbackDetector::updateTracksForChannel (int channel, int frameIndex) noexcept

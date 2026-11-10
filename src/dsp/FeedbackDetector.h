@@ -110,6 +110,9 @@ private:
         float magDb = -120.0f;
         float prominenceDb = 0.0f;
         float q = 20.0f;
+        float prom01 = 0.0f;
+        float narrow01 = 0.0f;
+        float growth01 = 0.0f;
         float inst = 0.0f;
     };
     std::vector<FramePeak> framePeaks_;

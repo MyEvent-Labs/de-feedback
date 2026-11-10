@@ -29,6 +29,10 @@ jobs:
       - name: Run tests
         run: ctest --test-dir build --output-on-failure
 
+      - name: Quality gate
+        shell: pwsh
+        run: '& "build/tools/defeedback_quality_artefacts/Release/defeedback_quality.exe" --gate'
+
       - name: Download pluginval
         shell: pwsh
         run: |
@@ -73,6 +77,9 @@ jobs:
 
       - name: Run tests
         run: ctest --test-dir build --output-on-failure
+
+      - name: Quality gate
+        run: ./build/tools/defeedback_quality_artefacts/Release/defeedback_quality --gate
 
       - name: Validate AU with auval
         run: auval -v aumf Dfdb MyEv || echo "auval not applicable or registration pending"

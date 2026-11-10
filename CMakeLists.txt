@@ -79,7 +79,8 @@ target_sources(DeFeedback PRIVATE
     src/PluginEditor.cpp
     src/ui/LookAndFeel.cpp
     src/ui/SpectrumView.cpp
-    src/ui/Meter.cpp)
+    src/ui/Meter.cpp
+    src/ui/NotchDisplay.cpp)
 
 target_include_directories(DeFeedback PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 

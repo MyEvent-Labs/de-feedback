@@ -18,17 +18,19 @@ DeFeedbackEditor::DeFeedbackEditor (DeFeedbackProcessor& processor)
     : juce::AudioProcessorEditor (&processor),
       proc_ (processor),
       spectrum_ (processor),
-      meter_ (processor)
+      meter_ (processor),
+      notchDisplay_ (processor)
 {
     setLookAndFeel (&lnf_);
     setResizable (true, true);
-    setResizeLimits (560, 420, 1400, 900);
-    setSize (720, 520);
+    setResizeLimits (640, 560, 1500, 1000);
+    setSize (780, 660);
 
     juce::ignoreUnused (minFreqLabel_, maxFreqLabel_, maxNotchesLabel_, qBiasLabel_, inputTrimLabel_, outputTrimLabel_);
 
     addAndMakeVisible (spectrum_);
     addAndMakeVisible (meter_);
+    addAndMakeVisible (notchDisplay_);
 
     // Header.
     bypassAttach_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (
@@ -186,13 +188,24 @@ void DeFeedbackEditor::resized()
     statusLabel_.setBounds (footer.removeFromRight (footer.getWidth() - 220).reduced (10, 6));
     meter_.setBounds (footer.reduced (8, 5));
 
-    auto gap = 8;
-    auto content = area.reduced (gap);
+    auto content = area.reduced (8);
 
-    spectrum_.setBounds (content.removeFromTop (advancedVisible_ ? content.getHeight() - 250 : content.getHeight() - 132));
+    const int controlsH = 126;
+    const int advH = advancedVisible_ ? 122 : 0;
+    const int meterH = 124;
+    const int gaps = advancedVisible_ ? 18 : 12;
+    const int specH = juce::jmax (150, content.getHeight() - controlsH - advH - meterH - gaps);
+
+    spectrum_.setBounds (content.removeFromTop (specH));
+    content.removeFromTop (6);
+
+    auto meterRow = content.removeFromTop (meterH);
+    meter_.setBounds (meterRow.removeFromLeft (246));
+    meterRow.removeFromLeft (6);
+    notchDisplay_.setBounds (meterRow);
 
     content.removeFromTop (6);
-    auto controls = content.removeFromTop (advancedVisible_ ? 128 : 126);
+    auto controls = content.removeFromTop (controlsH);
 
     auto modeArea = controls.removeFromLeft (110);
     modeLabel_.setBounds (modeArea.removeFromTop (16));

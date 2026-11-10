@@ -23,6 +23,9 @@ struct UiSnapshot
     std::atomic<int>   activeNotches { 0 };
     std::atomic<float> inputLevelDb { -100.0f };
     std::atomic<float> outputLevelDb { -100.0f };
+    std::atomic<float> inputRmsDb { -100.0f };
+    std::atomic<float> outputRmsDb { -100.0f };
+    std::atomic<float> reductionDb { 0.0f };   // deepest active notch cut
     std::atomic<float> risk { 0.0f };
     std::atomic<float> dspLoad { 0.0f };
     std::atomic<int>   overloads { 0 };

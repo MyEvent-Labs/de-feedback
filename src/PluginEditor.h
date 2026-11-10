@@ -5,6 +5,7 @@
 
 #include "ui/LookAndFeel.h"
 #include "ui/Meter.h"
+#include "ui/NotchDisplay.h"
 #include "ui/SpectrumView.h"
 
 #include <memory>
@@ -41,6 +42,7 @@ private:
 
     SpectrumView spectrum_;
     Meter meter_;
+    NotchDisplay notchDisplay_;
 
     juce::TextButton bypassButton_ { "BYPASS" };
     juce::TextButton freezeButton_ { "FREEZE" };
