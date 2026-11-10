@@ -224,6 +224,54 @@ namespace
                 expect (gainDb < -6.0 && gainDb > -12.0,
                         "stereo notch depth wrong: " + juce::String (gainDb) + " dB");
             }
+
+            beginTest ("notch depth matches the requested cut at the tone");
+            {
+                constexpr double pi = 3.14159265358979323846;
+                const int block = 256;
+
+                AdaptiveNotchBank::Config cfg;
+                cfg.linked = true;
+                cfg.maxCutDb = 9.0f;
+                cfg.strength = 1.0f;
+                cfg.attackSeconds = 0.001f;
+                cfg.releaseSeconds = 4.0f;
+
+                AdaptiveNotchBank bank;
+                bank.prepare (fs, block, 1);
+                bank.setConfig (cfg);
+
+                DetectedPeak p = makePeak (1000.0f, 1.0f); // confidence 1 -> full cut
+
+                std::vector<float> buf ((size_t) block);
+                double inE = 0.0, outE = 0.0;
+                const int blocks = 120;
+
+                for (int b = 0; b < blocks; ++b)
+                {
+                    for (int i = 0; i < block; ++i)
+                    {
+                        const double t = (double) (b * block + i) / fs;
+                        buf[(size_t) i] = (float) (0.3 * std::sin (2.0 * pi * 1000.0 * t));
+                    }
+
+                    bank.update (&p, 1);
+                    float* ptrs[1] { buf.data() };
+                    bank.process (ptrs, 1, block);
+
+                    if (b >= blocks / 2)
+                        for (int i = 0; i < block; ++i)
+                        {
+                            const double x = 0.3 * std::sin (2.0 * pi * 1000.0 * (double) (b * block + i) / fs);
+                            inE += x * x;
+                            outE += (double) buf[(size_t) i] * (double) buf[(size_t) i];
+                        }
+                }
+
+                const double gainDb = 10.0 * std::log10 (juce::jmax (1.0e-12, outE / juce::jmax (1.0e-12, inE)));
+                expect (std::abs (gainDb - (-9.0)) < 1.0,
+                        "depth=" + juce::String (gainDb) + " dB (expected -9)");
+            }
         }
     };
 }

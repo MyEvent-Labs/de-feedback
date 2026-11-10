@@ -259,7 +259,7 @@ namespace
 
     void scenarioFeedbackOnset (defeedback::parameters::ProtectionMode mode, const juce::String& tag)
     {
-        for (double freq : { 120.0, 250.0, 1000.0, 3150.0, 6300.0, 10000.0, 15000.0 })
+        for (double freq : { 80.0, 120.0, 250.0, 1000.0, 3150.0, 6300.0, 10000.0, 15000.0 })
         {
             const auto sig = genFeedbackOnset (freq, 5.0, 0.5);
             const auto r = runChain (sig, sig, mode, 2);
@@ -441,6 +441,28 @@ namespace
         const bool pass = r.finite && depth > 3.0 && r.maxNotches <= 2;
         report ("drift_900_to_1150Hz", pass,
                 "depth@final=" + juce::String (depth, 1) + "dB notches=" + juce::String (r.maxNotches));
+    }
+
+    std::vector<float> genTransients (double seconds)
+    {
+        const int n = (int) (fs * seconds);
+        std::vector<float> s ((size_t) n, 0.0f);
+        juce::Random rng (17);
+        const int period = (int) (fs * 0.5);
+        for (int i = 0; i < n; i += period)
+            for (int k = 0; k < 80 && i + k < n; ++k)
+                s[(size_t) (i + k)] += (float) ((rng.nextDouble() * 2.0 - 1.0) * 0.7 * std::exp (-k / 12.0));
+        return s;
+    }
+
+    void scenarioTransientRejection()
+    {
+        const auto sig = genTransients (6.0);
+        const auto r = runChain (sig, sig, defeedback::parameters::ProtectionMode::conservative, 2);
+
+        // Broadband transients must not deploy the notch bank.
+        const bool pass = r.finite && r.maxNotches <= 1;
+        report ("transient_rejection_conservative", pass, "maxNotches=" + juce::String (r.maxNotches));
     }
 
     void scenarioRelease()
@@ -629,6 +651,7 @@ int main (int argc, char** argv)
     scenarioHarmonicFeedback();
     scenarioMultiMode();
     scenarioDrift();
+    scenarioTransientRejection();
     scenarioRelease();
     scenarioIndependentStereo();
     scenarioSustainedTone();

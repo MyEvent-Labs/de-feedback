@@ -37,7 +37,18 @@ See [`docs/ALPHA_LIMITATIONS.md`](docs/ALPHA_LIMITATIONS.md).
   each notch's frequency and reduction depth.
 - Added `tools/quality`, an objective scenario harness (detection latency and
   depth, harmonic distortion, false positives on clean music/speech, stereo
-  identity, CPU) that runs as a CI gate via `--gate`.
+  identity, CPU) that runs as a CI gate via `--gate`. Coverage now includes a
+  80 Hz - 15 kHz onset sweep, harmonic and multi-mode feedback, drifting
+  feedback, independent stereo, release, transient rejection and sustained
+  tones (28 checks).
+- Detector detects high-frequency feedback (> 8 kHz) reliably: frame peaks are
+  sorted strongest-first and capped to the strongest 16, and the track-admission
+  floor no longer scales with a strict mode's threshold. 10 kHz onset 1.97 s ->
+  0.07 s; 15 kHz 4.3 s -> 0.41 s (Normal), now also detected in Conservative.
+- Peak frequencies are parabolically interpolated to sub-bin accuracy, so a
+  notch lands on the tone (full notch depth).
+- Growth gate (Conservative) now uses rise-since-creation rather than per-frame
+  growth, which mis-handled slow, bin-centred tones.
 
 ### Fixed
 - **Stereo harmonic distortion and a weak notch (root cause of the audible
