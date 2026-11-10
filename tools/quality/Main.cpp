@@ -368,6 +368,46 @@ namespace
         }
     }
 
+    std::vector<float> genMultiMode (double seconds, double onset, const std::vector<double>& freqs)
+    {
+        const int n = (int) (fs * seconds);
+        std::vector<float> s ((size_t) n);
+        juce::Random rng (808);
+        for (int i = 0; i < n; ++i)
+        {
+            const double t = (double) i / fs;
+            const double ramp = juce::jlimit (0.0, 1.0, (t - onset) / 0.4);
+            double v = 0.0;
+            for (auto f : freqs)
+                v += 0.4 * std::sin (2.0 * kPi * f * t);
+            s[(size_t) i] = (float) (ramp * v + 0.03 * (rng.nextDouble() * 2.0 - 1.0));
+        }
+        return s;
+    }
+
+    void scenarioMultiMode()
+    {
+        const std::vector<double> freqs { 730.0, 1910.0, 4330.0 };
+        const auto sig = genMultiMode (5.0, 0.3, freqs);
+        const auto r = runChain (sig, sig, defeedback::parameters::ProtectionMode::normal, 2);
+
+        const int from = (int) (fs * 3.0), to = (int) (fs * 4.5);
+        juce::String detail;
+        bool pass = r.finite;
+
+        for (auto f : freqs)
+        {
+            const double inDb = 20.0 * std::log10 (juce::jmax (1.0e-12, binMag (sig, f, from, to)));
+            const double outDb = 20.0 * std::log10 (juce::jmax (1.0e-12, binMag (r.left, f, from, to)));
+            const double depth = inDb - outDb;
+            if (depth <= 3.0)
+                pass = false;
+            detail += juce::String (juce::roundToInt (f)) + ":" + juce::String (depth, 1) + "dB ";
+        }
+
+        report ("multi_mode_3_tones", pass, detail + "notches=" + juce::String (r.maxNotches));
+    }
+
     void scenarioRelease()
     {
         const auto sig = genToneBurst (2000.0, 9.0, 0.5, 2.5, 0.8f);
@@ -511,6 +551,7 @@ int main (int argc, char** argv)
 
     std::printf ("\n-- release / independent stereo / sustained tone --\n");
     scenarioHarmonicFeedback();
+    scenarioMultiMode();
     scenarioRelease();
     scenarioIndependentStereo();
     scenarioSustainedTone();
