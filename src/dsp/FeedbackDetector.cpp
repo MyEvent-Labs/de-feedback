@@ -250,7 +250,10 @@ void FeedbackDetector::analyseFrame (int channel, int frameIndex) noexcept
     // saw its own harmonics, so harmonic musical notes were not discounted.)
     for (auto& fp : framePeaks_)
     {
-        const float harmonic = harmonicityFactor (fp.bin, channel);
+        // Only bother with harmonicity for peaks that stand meaningfully above
+        // the floor; weak peaks cannot activate anyway and this keeps the
+        // O(peaks^2) scoring cheap on broadband material.
+        const float harmonic = fp.prom01 > 0.05f ? harmonicityFactor (fp.bin, channel) : 1.0f;
         fp.inst = juce::jlimit (0.0f, 1.0f,
             (0.5f * fp.prom01 + 0.3f * fp.narrow01 + 0.2f * fp.growth01) * harmonic);
     }
@@ -265,12 +268,14 @@ float FeedbackDetector::estimateWidthBins (int peakBin) const noexcept
     const float peak = magDb_[(size_t) peakBin];
     const float target = peak - 6.0f;
 
+    const int maxWalk = 32; // cap: protects against a flat/noisy -6 dB plateau
+
     int left = peakBin;
-    while (left > 0 && magDb_[(size_t) (left - 1)] > target)
+    while (left > 0 && (peakBin - left) < maxWalk && magDb_[(size_t) (left - 1)] > target)
         --left;
 
     int right = peakBin;
-    while (right < numBins_ - 1 && magDb_[(size_t) (right + 1)] > target)
+    while (right < numBins_ - 1 && (right - peakBin) < maxWalk && magDb_[(size_t) (right + 1)] > target)
         ++right;
 
     return (float) (right - left + 1);
@@ -310,22 +315,20 @@ float FeedbackDetector::harmonicityFactor (int peakBin, int channel) const noexc
         // Any small-integer ratio counts, not just integer multiples: a
         // partial harmonic subset (e.g. odd harmonics of a note) is still a
         // harmonic series and must be discounted.
+        // O(K) check for a small-integer ratio p/q: for each q, test whether
+        // ratio*q is close to an integer p in range. This is equivalent to the
+        // p/q double loop but ~K times cheaper.
         const float ratio = f / f0;
         bool related = false;
-        for (int p = 1; p <= kMaxHarmonic && ! related; ++p)
+        for (int q = 1; q <= kMaxHarmonic && ! related; ++q)
         {
-            for (int q = 1; q <= kMaxHarmonic; ++q)
-            {
-                if (p == q)
-                    continue;
+            const float p = std::round (ratio * (float) q);
+            if (p < 1.0f || p > (float) kMaxHarmonic)
+                continue;
 
-                const float rr = (float) p / (float) q;
-                if (std::abs (ratio - rr) <= config_.harmonicTolerance * rr)
-                {
-                    related = true;
-                    break;
-                }
-            }
+            const float rr = p / (float) q;
+            if (std::abs (ratio - rr) <= config_.harmonicTolerance * rr)
+                related = true;
         }
 
         if (related)
