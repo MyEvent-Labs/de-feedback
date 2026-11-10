@@ -397,8 +397,17 @@ void FeedbackDetector::updateTracksForChannel (int channel, int frameIndex) noex
                 tr.onStreak = 0;
             }
 
+            // Track growth evidence so a steady non-growing tone can be held
+            // off in the Conservative profile.
+            if (fp.growth01 >= config_.growthThreshold01)
+                ++tr.growthStreak;
+            else if (tr.growthStreak > 0)
+                --tr.growthStreak;
+
             if (! tr.active)
-                tr.active = tr.onStreak >= config_.onFrames && tr.confidence >= config_.onConfidence;
+                tr.active = tr.onStreak >= config_.onFrames
+                         && tr.confidence >= config_.onConfidence
+                         && (! config_.requireGrowth || tr.growthStreak >= config_.growthFrames);
             else if (tr.confidence < config_.offConfidence && tr.offStreak >= config_.offFrames)
                 tr.active = false;
         }
@@ -442,6 +451,7 @@ void FeedbackDetector::updateTracksForChannel (int channel, int frameIndex) noex
                     tr.confidence    = fp.inst * 0.5f;
                     tr.lastSeenFrame = frameIndex;
                     tr.onStreak      = 1;
+                    tr.growthStreak  = (fp.growth01 >= config_.growthThreshold01) ? 1 : 0;
                     matched[(size_t) target] = true;
                 }
             }

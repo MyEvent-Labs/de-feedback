@@ -74,6 +74,7 @@ private:
         int   channel     = 0;
         int   onStreak    = 0;
         int   offStreak   = 0;
+        int   growthStreak = 0;
         int   lastSeenFrame = 0;
     };
 

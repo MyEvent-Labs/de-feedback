@@ -41,6 +41,14 @@ struct DetectorConfig
     // Growth rate damping: a peak that is not growing is less likely feedback.
     float growthWeight        = 0.35f;
 
+    // Growth-evidence gate. With this on, a track must show positive growth
+    // for `growthFrames` frames before it activates, so a steady non-growing
+    // tone (flute, organ, sustained pad) is not notched. Feedback onset grows
+    // and passes. Used by the Conservative profile.
+    bool  requireGrowth       = false;
+    int   growthFrames        = 4;
+    float growthThreshold01   = 0.15f;
+
     // Harmonicity: penalise tones that look like a harmonic series. A relative
     // only counts if it is within this window of the peak's own level, so weak
     // noise peaks cannot masquerade as harmonics of a real tone.

@@ -20,16 +20,17 @@ namespace
         float baseProminenceDb = 10.0f;
         float cutScale = 1.0f;
         float attackSeconds = 0.02f;
+        bool  requireGrowth = false;
     };
 
     ModeProfile profileFor (ProtectionMode protectionMode) noexcept
     {
         switch (protectionMode)
         {
-            case ProtectionMode::conservative: return { 8, 0.62f, 0.34f, 12.0f, 0.70f, 0.05f };
-            case ProtectionMode::aggressive:   return { 3, 0.45f, 0.28f,  8.0f, 1.00f, 0.01f };
+            case ProtectionMode::conservative: return { 8, 0.62f, 0.34f, 12.0f, 0.70f, 0.05f, true };
+            case ProtectionMode::aggressive:   return { 3, 0.45f, 0.28f,  8.0f, 1.00f, 0.01f, false };
             case ProtectionMode::normal:
-            default:                           return { 5, 0.55f, 0.30f, 10.0f, 1.00f, 0.02f };
+            default:                           return { 5, 0.55f, 0.30f, 10.0f, 1.00f, 0.02f, false };
         }
     }
 
@@ -140,6 +141,7 @@ void DeFeedbackProcessor::updateFromParameters()
     dc.onFrames = prof.onFrames;
     dc.onConfidence = prof.onConfidence;
     dc.offConfidence = prof.offConfidence;
+    dc.requireGrowth = prof.requireGrowth;
     dc.minProminenceDb = juce::jlimit (3.0f, 30.0f, prof.baseProminenceDb - sens);
     dc.strongProminenceDb = dc.minProminenceDb + 12.0f;
     detector_.setConfig (dc);

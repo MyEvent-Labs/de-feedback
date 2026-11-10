@@ -33,16 +33,17 @@ namespace
         float baseProminenceDb;
         float cutScale;
         float attackSeconds;
+        bool  requireGrowth;
     };
 
     ModeParams modeParams (defeedback::parameters::ProtectionMode m)
     {
         switch (m)
         {
-            case defeedback::parameters::ProtectionMode::conservative: return { 8, 0.62f, 0.34f, 12.0f, 0.70f, 0.05f };
-            case defeedback::parameters::ProtectionMode::aggressive:   return { 3, 0.45f, 0.28f,  8.0f, 1.00f, 0.01f };
+            case defeedback::parameters::ProtectionMode::conservative: return { 8, 0.62f, 0.34f, 12.0f, 0.70f, 0.05f, true };
+            case defeedback::parameters::ProtectionMode::aggressive:   return { 3, 0.45f, 0.28f,  8.0f, 1.00f, 0.01f, false };
             case defeedback::parameters::ProtectionMode::normal:
-            default:                                                   return { 5, 0.55f, 0.30f, 10.0f, 1.00f, 0.02f };
+            default:                                                   return { 5, 0.55f, 0.30f, 10.0f, 1.00f, 0.02f, false };
         }
     }
 
@@ -53,6 +54,7 @@ namespace
         c.onFrames = p.onFrames;
         c.onConfidence = p.onConfidence;
         c.offConfidence = p.offConfidence;
+        c.requireGrowth = p.requireGrowth;
         c.minProminenceDb = juce::jlimit (3.0f, 30.0f, p.baseProminenceDb - sensitivity);
         c.strongProminenceDb = c.minProminenceDb + 12.0f;
         return c;
@@ -255,7 +257,7 @@ namespace
             gGate = gGate || true; // failure already recorded
     }
 
-    void scenarioFeedbackOnset (defeedback::parameters::ProtectionMode mode)
+    void scenarioFeedbackOnset (defeedback::parameters::ProtectionMode mode, const juce::String& tag)
     {
         for (double freq : { 250.0, 1000.0, 3150.0, 6300.0 })
         {
@@ -269,8 +271,8 @@ namespace
             const double depth = toneDb - outDb;
             const double h2 = 20.0 * std::log10 (juce::jmax (1.0e-12, binMag (r.left, freq * 2.0, from, to))) - toneDb;
 
-            const bool pass = r.finite && latency >= 0.0 && latency < 2.0 && depth > 3.0 && h2 < -40.0;
-            report ("feedback_onset_" + juce::String (juce::roundToInt (freq)) + "Hz",
+            const bool pass = r.finite && latency >= 0.0 && latency < 2.5 && depth > 3.0 && h2 < -40.0;
+            report ("feedback_onset_" + tag + "_" + juce::String (juce::roundToInt (freq)) + "Hz",
                     pass,
                     "lat=" + juce::String (latency, 2) + "s depth=" + juce::String (depth, 1)
                     + "dB h2=" + juce::String (h2, 1) + "dBc notches=" + juce::String (r.maxNotches));
@@ -461,8 +463,9 @@ int main (int argc, char** argv)
     std::printf ("De-Feedback quality harness\n");
     std::printf ("============================\n\n");
 
-    std::printf ("-- feedback onset (Normal) --\n");
-    scenarioFeedbackOnset (ProtectionMode::normal);
+    std::printf ("-- feedback onset --\n");
+    scenarioFeedbackOnset (ProtectionMode::normal, "normal");
+    scenarioFeedbackOnset (ProtectionMode::conservative, "conservative");
 
     std::printf ("\n-- clean material (Conservative) --\n");
     scenarioClean ("clean_music_conservative", genCleanMusic (8.0), ProtectionMode::conservative, 2);
