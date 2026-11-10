@@ -46,7 +46,8 @@ void FeedbackDetector::prepare (double sampleRate, int numChannels, const Detect
 
     fftData_.assign ((size_t) (fftSize_ * 2), 0.0f);
     magDb_.assign ((size_t) numBins_, kMinDb);
-    prevMagDb_.assign ((size_t) numBins_, kMinDb);
+    for (auto& p : prevMagDb_)
+        p.assign ((size_t) numBins_, kMinDb);
 
     for (int ch = 0; ch < kMaxChannels; ++ch)
     {
@@ -73,12 +74,14 @@ void FeedbackDetector::reset() noexcept
     }
 
     std::fill (magDb_.begin(), magDb_.end(), kMinDb);
-    std::fill (prevMagDb_.begin(), prevMagDb_.end(), kMinDb);
+    for (auto& p : prevMagDb_)
+        std::fill (p.begin(), p.end(), kMinDb);
 
-    for (auto& t : tracks_)
-        t = Track {};
+    for (auto& lane : tracks_)
+        for (auto& t : lane)
+            t = Track {};
 
-    numTracks_ = 0;
+    numTracks_.fill (0);
     numPeaks_  = 0;
     frameCounter_ = 0;
 }
@@ -122,20 +125,23 @@ void FeedbackDetector::process (const float* const* channels, int numChannels, i
         ringWrite_[lane] = w;
     }
 
-    for (int t = 0; t < numTracks_ && numPeaks_ < kMaxPeaks; ++t)
+    for (int ch = 0; ch < numChannels_ && numPeaks_ < kMaxPeaks; ++ch)
     {
-        const auto& tr = tracks_[t];
-        if (! tr.active)
-            continue;
+        for (int t = 0; t < numTracks_[(size_t) ch] && numPeaks_ < kMaxPeaks; ++t)
+        {
+            const auto& tr = tracks_[(size_t) ch][(size_t) t];
+            if (! tr.active)
+                continue;
 
-        DetectedPeak p;
-        p.frequencyHz  = tr.frequency;
-        p.confidence   = tr.confidence;
-        p.prominenceDb = tr.prominence;
-        p.q            = tr.q;
-        p.levelDb      = tr.levelDb;
-        p.channel      = tr.channel;
-        peaks_[(size_t) numPeaks_++] = p;
+            DetectedPeak p;
+            p.frequencyHz  = tr.frequency;
+            p.confidence   = tr.confidence;
+            p.prominenceDb = tr.prominence;
+            p.q            = tr.q;
+            p.levelDb      = tr.levelDb;
+            p.channel      = tr.channel;
+            peaks_[(size_t) numPeaks_++] = p;
+        }
     }
 }
 
@@ -217,7 +223,7 @@ void FeedbackDetector::analyseFrame (int channel, int frameIndex) noexcept
         const float narrow = juce::jlimit (0.0f, 1.0f,
             1.0f - widthBins / juce::jmax (1.0f, config_.maxPeakWidthBins));
 
-        const float growthDb = juce::jlimit (-12.0f, 24.0f, mag - prevMagDb_[(size_t) b]);
+        const float growthDb = juce::jlimit (-12.0f, 24.0f, mag - prevMagDb_[(size_t) channel][(size_t) b]);
         const float growth = juce::jlimit (0.0f, 1.0f, growthDb / 6.0f);
 
         const float prom = juce::jlimit (0.0f, 1.0f,
@@ -249,7 +255,7 @@ void FeedbackDetector::analyseFrame (int channel, int frameIndex) noexcept
             (0.5f * fp.prom01 + 0.3f * fp.narrow01 + 0.2f * fp.growth01) * harmonic);
     }
 
-    std::copy (magDb_.begin(), magDb_.end(), prevMagDb_.begin());
+    std::copy (magDb_.begin(), magDb_.end(), prevMagDb_[(size_t) channel].begin());
 
     updateTracksForChannel (channel, frameIndex);
 }
@@ -340,6 +346,11 @@ float FeedbackDetector::harmonicityFactor (int peakBin, int channel) const noexc
 
 void FeedbackDetector::updateTracksForChannel (int channel, int frameIndex) noexcept
 {
+    // Each channel owns its own track table, so two channels never compete
+    // for slots and cannot evict each other's real tracks.
+    auto& channelTracks = tracks_[(size_t) channel];
+    int&  channelCount  = numTracks_[(size_t) channel];
+
     std::array<bool, kMaxTracks> matched {};
     std::fill (matched.begin(), matched.end(), false);
 
@@ -349,13 +360,9 @@ void FeedbackDetector::updateTracksForChannel (int channel, int frameIndex) noex
 
         int best = -1;
         float bestDist = 1.0e9f;
-        for (int t = 0; t < numTracks_; ++t)
+        for (int t = 0; t < channelCount; ++t)
         {
-            const auto& tr = tracks_[(size_t) t];
-            if (tr.channel != channel)
-                continue;
-
-            const float dist = std::abs (tr.frequency - freq) / juce::jmax (20.0f, freq);
+            const float dist = std::abs (channelTracks[(size_t) t].frequency - freq) / juce::jmax (20.0f, freq);
             if (dist < bestDist)
             {
                 bestDist = dist;
@@ -367,7 +374,7 @@ void FeedbackDetector::updateTracksForChannel (int channel, int frameIndex) noex
 
         if (best >= 0 && bestDist <= tolerance)
         {
-            auto& tr = tracks_[(size_t) best];
+            auto& tr = channelTracks[(size_t) best];
             matched[(size_t) best] = true;
 
             // Heavy smoothing keeps a settled notch from being re-tuned or
@@ -399,26 +406,25 @@ void FeedbackDetector::updateTracksForChannel (int channel, int frameIndex) noex
         {
             // Do not let broadband noise peaks flood the track table. Only
             // start tracking a peak that is already reasonably strong, and if
-            // the table is full evict the weakest same-channel track so a real
-            // feedback tone can always be tracked through broadband material.
+            // the table is full evict the weakest track so a real feedback
+            // tone can always be tracked through broadband material.
             if (fp.inst >= config_.onConfidence * 0.5f)
             {
                 int target = -1;
 
-                if (numTracks_ < kMaxTracks)
+                if (channelCount < kMaxTracks)
                 {
-                    target = numTracks_;
-                    ++numTracks_;
+                    target = channelCount;
+                    ++channelCount;
                 }
                 else
                 {
                     float weakest = fp.inst;
-                    for (int t = 0; t < numTracks_; ++t)
+                    for (int t = 0; t < channelCount; ++t)
                     {
-                        const auto& cand = tracks_[(size_t) t];
-                        if (cand.channel == channel && ! matched[(size_t) t] && cand.confidence < weakest)
+                        if (! matched[(size_t) t] && channelTracks[(size_t) t].confidence < weakest)
                         {
-                            weakest = cand.confidence;
+                            weakest = channelTracks[(size_t) t].confidence;
                             target = t;
                         }
                     }
@@ -426,7 +432,7 @@ void FeedbackDetector::updateTracksForChannel (int channel, int frameIndex) noex
 
                 if (target >= 0)
                 {
-                    auto& tr = tracks_[(size_t) target];
+                    auto& tr = channelTracks[(size_t) target];
                     tr = Track {};
                     tr.channel       = channel;
                     tr.frequency     = freq;
@@ -442,9 +448,9 @@ void FeedbackDetector::updateTracksForChannel (int channel, int frameIndex) noex
         }
     }
 
-    for (int t = 0; t < numTracks_; ++t)
+    for (int t = 0; t < channelCount; ++t)
     {
-        auto& tr = tracks_[(size_t) t];
+        auto& tr = channelTracks[(size_t) t];
         if (matched[(size_t) t])
             continue;
 
@@ -457,18 +463,18 @@ void FeedbackDetector::updateTracksForChannel (int channel, int frameIndex) noex
     }
 
     int write = 0;
-    for (int t = 0; t < numTracks_; ++t)
+    for (int t = 0; t < channelCount; ++t)
     {
-        const auto& tr = tracks_[(size_t) t];
+        const auto& tr = channelTracks[(size_t) t];
         const bool stale = (frameIndex - tr.lastSeenFrame) > (config_.offFrames * 2);
         if (tr.active || ! stale)
         {
             if (write != t)
-                tracks_[(size_t) write] = tr;
+                channelTracks[(size_t) write] = tr;
             ++write;
         }
     }
-    numTracks_ = write;
+    channelCount = write;
 }
 
 } // namespace defeedback

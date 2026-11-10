@@ -58,11 +58,11 @@ namespace
         return c;
     }
 
-    defeedback::AdaptiveNotchBank::Config bankConfig (defeedback::parameters::ProtectionMode m)
+    defeedback::AdaptiveNotchBank::Config bankConfig (defeedback::parameters::ProtectionMode m, bool linked = true)
     {
         const auto p = modeParams (m);
         defeedback::AdaptiveNotchBank::Config c;
-        c.linked = true;
+        c.linked = linked;
         c.maxCutDb = 9.0f * p.cutScale;
         c.attackSeconds = p.attackSeconds;
         c.releaseSeconds = 4.0f;
@@ -75,6 +75,7 @@ namespace
         std::vector<float> right;
         int maxNotches = 0;
         int firstNotchBlock = -1;
+        int lastActiveBlock = -1;
         bool finite = true;
     };
 
@@ -82,14 +83,15 @@ namespace
     ChainResult runChain (const std::vector<float>& inL,
                           const std::vector<float>& inR,
                           defeedback::parameters::ProtectionMode mode,
-                          int channels)
+                          int channels,
+                          bool linked = true)
     {
         defeedback::FeedbackDetector det;
         det.prepare (fs, channels, detectorConfig (mode));
 
         defeedback::AdaptiveNotchBank bank;
         bank.prepare (fs, blockSize, channels);
-        bank.setConfig (bankConfig (mode));
+        bank.setConfig (bankConfig (mode, linked));
 
         ChainResult r;
         r.left = inL;
@@ -99,8 +101,8 @@ namespace
 
         for (int pos = 0; pos + blockSize <= n; pos += blockSize)
         {
-            const float* analysis[1] { inL.data() + pos };
-            det.process (analysis, 1, blockSize, true);
+            const float* analysis[2] { inL.data() + pos, inR.data() + pos };
+            det.process (analysis, linked ? 1 : channels, blockSize, linked);
 
             defeedback::DetectedPeak peaks[16];
             const int np = juce::jmin (16, det.getNumPeaks());
@@ -114,8 +116,12 @@ namespace
 
             const int active = bank.getActiveCount();
             r.maxNotches = juce::jmax (r.maxNotches, active);
-            if (active > 0 && r.firstNotchBlock < 0)
-                r.firstNotchBlock = pos / blockSize;
+            if (active > 0)
+            {
+                if (r.firstNotchBlock < 0)
+                    r.firstNotchBlock = pos / blockSize;
+                r.lastActiveBlock = pos / blockSize;
+            }
 
             for (int i = 0; i < blockSize; ++i)
                 if (! std::isfinite (r.left[(size_t) (pos + i)]))
@@ -291,6 +297,107 @@ namespace
         report ("stereo_identity_1000Hz", maxDiff < 1.0e-5f, "maxL-R=" + juce::String (maxDiff));
     }
 
+    std::vector<float> genToneBurst (double freq, double seconds, double on, double off, float amp)
+    {
+        const int n = (int) (fs * seconds);
+        std::vector<float> s ((size_t) n);
+        juce::Random rng (55);
+        for (int i = 0; i < n; ++i)
+        {
+            const double t = (double) i / fs;
+            double env = (t >= on && t <= off) ? 1.0 : 0.0;
+            if (t >= on && t < on + 0.02)
+                env = (t - on) / 0.02;
+            if (t > off - 0.02 && t <= off)
+                env = (off - t) / 0.02;
+            s[(size_t) i] = (float) (0.03 * (rng.nextDouble() * 2.0 - 1.0) + amp * env * std::sin (2.0 * kPi * freq * t));
+        }
+        return s;
+    }
+
+    std::vector<float> genSustainedTone (double freq, double seconds, float amp)
+    {
+        const int n = (int) (fs * seconds);
+        std::vector<float> s ((size_t) n);
+        juce::Random rng (21);
+        for (int i = 0; i < n; ++i)
+        {
+            const double t = (double) i / fs;
+            s[(size_t) i] = (float) (amp * std::sin (2.0 * kPi * freq * t) + 0.005 * (rng.nextDouble() * 2.0 - 1.0));
+        }
+        return s;
+    }
+
+    void scenarioRelease()
+    {
+        const auto sig = genToneBurst (2000.0, 9.0, 0.5, 2.5, 0.8f);
+        const auto r = runChain (sig, sig, defeedback::parameters::ProtectionMode::normal, 2);
+
+        const int toneEndBlock = (int) (2.5 * fs / blockSize);
+        const int deadlineBlock = (int) ((2.5 + 6.0) * fs / blockSize);
+        const bool pass = r.finite && r.firstNotchBlock >= 0 && r.firstNotchBlock < toneEndBlock
+                       && r.lastActiveBlock >= 0 && r.lastActiveBlock <= deadlineBlock;
+
+        report ("release_tone_burst", pass,
+                "first=" + juce::String (r.firstNotchBlock) + " last=" + juce::String (r.lastActiveBlock)
+                + " end=" + juce::String (toneEndBlock) + " deadline=" + juce::String (deadlineBlock));
+    }
+
+    void scenarioIndependentStereo()
+    {
+        const auto l = genFeedbackOnset (1000.0, 5.0, 0.3);
+        const auto r = genFeedbackOnset (3000.0, 5.0, 0.3);
+        const auto res = runChain (l, r, defeedback::parameters::ProtectionMode::normal, 2, false);
+
+        const int from = (int) (fs * 3.0), to = (int) (fs * 4.5);
+        const double inL = 20.0 * std::log10 (juce::jmax (1.0e-12, binMag (l, 1000.0, from, to)));
+        const double outL = 20.0 * std::log10 (juce::jmax (1.0e-12, binMag (res.left, 1000.0, from, to)));
+        const double inR = 20.0 * std::log10 (juce::jmax (1.0e-12, binMag (r, 3000.0, from, to)));
+        const double outR = 20.0 * std::log10 (juce::jmax (1.0e-12, binMag (res.right, 3000.0, from, to)));
+
+        const bool pass = res.finite && (inL - outL) > 3.0 && (inR - outR) > 3.0;
+        report ("independent_stereo_L1000_R3000", pass,
+                "depthL=" + juce::String (inL - outL, 1) + "dB depthR=" + juce::String (inR - outR, 1)
+                + "dB notches=" + juce::String (res.maxNotches));
+    }
+
+    void scenarioSustainedTone()
+    {
+        const auto sig = genSustainedTone (1000.0, 6.0, 0.2f);
+        const auto r = runChain (sig, sig, defeedback::parameters::ProtectionMode::conservative, 2);
+
+        const int from = (int) (fs * 3.0), to = (int) (fs * 5.0);
+        const double inDb = 20.0 * std::log10 (juce::jmax (1.0e-12, binMag (sig, 1000.0, from, to)));
+        const double outDb = 20.0 * std::log10 (juce::jmax (1.0e-12, binMag (r.left, 1000.0, from, to)));
+        const double depth = inDb - outDb;
+
+        report ("sustained_pure_tone_conservative", r.finite && depth <= 7.0,
+                "depth=" + juce::String (depth, 1) + "dB notches=" + juce::String (r.maxNotches));
+    }
+
+    void dumpIndependent()
+    {
+        const auto l = genFeedbackOnset (1000.0, 4.0, 0.3);
+        const auto r = genFeedbackOnset (3000.0, 4.0, 0.3);
+        defeedback::FeedbackDetector det;
+        det.prepare (fs, 2, detectorConfig (defeedback::parameters::ProtectionMode::normal));
+
+        for (int pos = 0; pos + blockSize <= (int) l.size(); pos += blockSize)
+        {
+            const float* analysis[2] { l.data() + pos, r.data() + pos };
+            det.process (analysis, 2, blockSize, false);
+
+            if ((pos / blockSize) % 12 == 0)
+            {
+                std::printf ("t=%.2f peaks=%d:", (double) pos / fs, det.getNumPeaks());
+                for (int i = 0; i < det.getNumPeaks(); ++i)
+                    std::printf (" ch%d %.0fHz(%.2f)", det.getPeak (i).channel,
+                                 det.getPeak (i).frequencyHz, det.getPeak (i).confidence);
+                std::printf ("\n");
+            }
+        }
+    }
+
     void dumpMusic()
     {
         const auto sig = genCleanMusic (4.0);
@@ -329,16 +436,23 @@ namespace
 
 int main (int argc, char** argv)
 {
-    bool dump = false;
+    bool dump = false, dumpInd = false;
     for (int i = 1; i < argc; ++i)
     {
         if (juce::String (argv[i]) == "--gate") gGate = true;
         if (juce::String (argv[i]) == "--dump") dump = true;
+        if (juce::String (argv[i]) == "--dumpind") dumpInd = true;
     }
 
     if (dump)
     {
         dumpMusic();
+        return 0;
+    }
+
+    if (dumpInd)
+    {
+        dumpIndependent();
         return 0;
     }
 
@@ -353,6 +467,11 @@ int main (int argc, char** argv)
     std::printf ("\n-- clean material (Conservative) --\n");
     scenarioClean ("clean_music_conservative", genCleanMusic (8.0), ProtectionMode::conservative, 2);
     scenarioClean ("clean_speech_conservative", genCleanSpeech (8.0), ProtectionMode::conservative, 2);
+
+    std::printf ("\n-- release / independent stereo / sustained tone --\n");
+    scenarioRelease();
+    scenarioIndependentStereo();
+    scenarioSustainedTone();
 
     std::printf ("\n-- stereo / cpu --\n");
     scenarioStereoIdentity();

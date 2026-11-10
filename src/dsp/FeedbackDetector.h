@@ -100,7 +100,7 @@ private:
     std::vector<float> window_;
     std::vector<float> fftData_;          // 2 * fftSize
     std::vector<float> magDb_;            // numBins
-    std::vector<float> prevMagDb_;        // numBins, for growth
+    std::array<std::vector<float>, kMaxChannels> prevMagDb_;  // per channel, for growth
     std::array<std::vector<float>, kMaxChannels> floorDb_;
 
     // Per-frame scratch, preallocated.
@@ -117,8 +117,10 @@ private:
     };
     std::vector<FramePeak> framePeaks_;
 
-    std::array<Track, kMaxTracks> tracks_ {};
-    int numTracks_ = 0;
+    // Per-channel track tables: two channels must not compete for the same
+    // slots, or one channel's peaks evict the other's real tracks.
+    std::array<std::array<Track, kMaxTracks>, kMaxChannels> tracks_ {};
+    std::array<int, kMaxChannels> numTracks_ { 0, 0 };
     int frameCounter_ = 0;
 
     std::array<DetectedPeak, kMaxPeaks> peaks_ {};
