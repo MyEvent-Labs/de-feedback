@@ -330,6 +330,44 @@ namespace
         return s;
     }
 
+    std::vector<float> genHarmonicFeedback (double freq, double seconds, double onset)
+    {
+        const int n = (int) (fs * seconds);
+        std::vector<float> s ((size_t) n);
+        juce::Random rng (321);
+        for (int i = 0; i < n; ++i)
+        {
+            const double t = (double) i / fs;
+            const double ramp = juce::jlimit (0.0, 1.0, (t - onset) / 0.4);
+            const double v = ramp * (0.55 * std::sin (2.0 * kPi * freq * t)
+                                   + 0.28 * std::sin (2.0 * kPi * 2.0 * freq * t)
+                                   + 0.14 * std::sin (2.0 * kPi * 3.0 * freq * t))
+                           + 0.03 * (rng.nextDouble() * 2.0 - 1.0);
+            s[(size_t) i] = (float) v;
+        }
+        return s;
+    }
+
+    void scenarioHarmonicFeedback()
+    {
+        for (double freq : { 1000.0, 2500.0 })
+        {
+            const auto sig = genHarmonicFeedback (freq, 5.0, 0.3);
+            const auto r = runChain (sig, sig, defeedback::parameters::ProtectionMode::normal, 2);
+
+            const double latency = r.firstNotchBlock >= 0 ? (double) r.firstNotchBlock * blockSize / fs - 0.3 : -1.0;
+            const int from = (int) (fs * 3.0), to = (int) (fs * 4.5);
+            const double inDb = 20.0 * std::log10 (juce::jmax (1.0e-12, binMag (sig, freq, from, to)));
+            const double outDb = 20.0 * std::log10 (juce::jmax (1.0e-12, binMag (r.left, freq, from, to)));
+            const double depth = inDb - outDb;
+
+            const bool pass = r.finite && latency >= 0.0 && latency < 0.40 && depth > 3.0;
+            report ("harmonic_feedback_" + juce::String (juce::roundToInt (freq)) + "Hz", pass,
+                    "lat=" + juce::String (latency, 2) + "s depth=" + juce::String (depth, 1)
+                    + "dB notches=" + juce::String (r.maxNotches));
+        }
+    }
+
     void scenarioRelease()
     {
         const auto sig = genToneBurst (2000.0, 9.0, 0.5, 2.5, 0.8f);
@@ -472,6 +510,7 @@ int main (int argc, char** argv)
     scenarioClean ("clean_speech_conservative", genCleanSpeech (8.0), ProtectionMode::conservative, 2);
 
     std::printf ("\n-- release / independent stereo / sustained tone --\n");
+    scenarioHarmonicFeedback();
     scenarioRelease();
     scenarioIndependentStereo();
     scenarioSustainedTone();

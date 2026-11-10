@@ -354,7 +354,12 @@ float FeedbackDetector::harmonicityFactor (int peakBin, int channel) const noexc
         return 1.0f;
 
     const float frac = juce::jlimit (0.0f, 1.0f, (float) relatives / (float) strongPeaks);
-    return juce::jlimit (0.1f, 1.0f, 1.0f - config_.harmonicityPenalty * frac * 1.5f);
+
+    // Scale by how many harmonics are present. Real feedback can pick up one
+    // or two harmonics and must survive; a rich musical series (four or more)
+    // is discounted hard.
+    const float richness = juce::jlimit (0.0f, 1.0f, (float) (relatives - 1) / 4.0f);
+    return juce::jlimit (0.1f, 1.0f, 1.0f - config_.harmonicityPenalty * frac * richness * 1.5f);
 }
 
 void FeedbackDetector::updateTracksForChannel (int channel, int frameIndex) noexcept
