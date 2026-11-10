@@ -154,7 +154,9 @@ void AdaptiveNotchBank::update (const DetectedPeak* peaks, int numPeaks) noexcep
         {
             if (isNewSlot)
             {
-                slot->filter.reset();
+                for (auto& f : slot->filters)
+                    f.reset();
+
                 slot->currentFreq = slot->targetFreq = (double) freq;
                 slot->currentQ    = slot->targetQ    = (double) q;
                 slot->currentGainDb = 0.0;
@@ -214,18 +216,21 @@ void AdaptiveNotchBank::updateSmoothing (int numSamples) noexcept
 
             if (s.retiring && std::abs (s.currentGainDb) < 0.01)
             {
-                s.filter.reset();
+                for (auto& f : s.filters)
+                    f.reset();
+
                 s = Slot {};
                 continue;
             }
 
             const auto coeffs = Biquad::makePeak (sampleRate_, s.currentFreq, s.currentQ, s.currentGainDb);
+            const auto safe = std::isfinite (coeffs.b0) && std::isfinite (coeffs.b1) && std::isfinite (coeffs.b2)
+                           && std::isfinite (coeffs.a1) && std::isfinite (coeffs.a2);
+            const auto toUse = safe ? coeffs : Biquad::makeIdentity();
 
-            if (std::isfinite (coeffs.b0) && std::isfinite (coeffs.b1) && std::isfinite (coeffs.b2)
-                && std::isfinite (coeffs.a1) && std::isfinite (coeffs.a2))
-                s.filter.setCoeffs (coeffs);
-            else
-                s.filter.setCoeffs (Biquad::makeIdentity());
+            // Shared coefficients, independent per-channel state.
+            for (auto& f : s.filters)
+                f.setCoeffs (toUse);
         }
     }
 }
@@ -242,10 +247,12 @@ void AdaptiveNotchBank::processLane (int lane, int channel, float* data, int num
         if (! s.allocated)
             continue;
 
-        for (int n = 0; n < numSamples; ++n)
-            data[n] = (float) s.filter.processSample ((double) data[n]);
+        auto& filter = s.filters[(size_t) juce::jlimit (0, kMaxLanes - 1, channel)];
 
-        s.filter.sanitiseState();
+        for (int n = 0; n < numSamples; ++n)
+            data[n] = (float) filter.processSample ((double) data[n]);
+
+        filter.sanitiseState();
     }
 }
 

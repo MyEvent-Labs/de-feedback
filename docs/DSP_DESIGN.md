@@ -94,6 +94,14 @@ Linked (default) analyses the mono sum and applies identical notches to both
 channels, preserving image stability. Independent analysis is opt-in via the
 Advanced panel.
 
+In linked mode the two channels **share coefficients but not filter state**:
+`AdaptiveNotchBank::Slot` holds one biquad per channel. Sharing a single biquad
+state across channels is incorrect — each channel's output would be computed
+from state containing the other channel's samples, producing a weak notch and
+harmonic distortion on stereo material. A regression test asserts that channel
+0 of a linked stereo run equals a mono run and that the notch reaches its full
+depth.
+
 ## Latency
 
 There is **no algorithmic lookahead**. The detector analyses the current and

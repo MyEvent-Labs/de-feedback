@@ -76,7 +76,10 @@ public:
 private:
     struct Slot
     {
-        Biquad filter;
+        // One filter state per channel. Linked stereo shares the coefficients
+        // but MUST NOT share filter state between channels, or each channel's
+        // output is computed from state containing the other channel's samples.
+        std::array<Biquad, kMaxLanes> filters;
         double targetFreq = 1000.0, currentFreq = 1000.0;
         double targetQ = 20.0, currentQ = 20.0;
         double targetGainDb = 0.0, currentGainDb = 0.0;

@@ -25,11 +25,20 @@ All notable changes to De-Feedback are documented here. This project adheres to
 See [`docs/ALPHA_LIMITATIONS.md`](docs/ALPHA_LIMITATIONS.md).
 
 ### Fixed
-- Detector false-negative churn on sustained tones: the per-bin temporal
-  spectral floor crept up to a steady tone and released its notch after a few
-  seconds, producing repeated notch engage/release ramps (audible grit).
-  Replaced with a frequency-local shoulder floor so a sustained tone holds its
-  notch for as long as it persists.
+- **Stereo harmonic distortion and a weak notch (root cause of the audible
+  high-frequency grit).** In linked stereo the adaptive bank drove both
+  channels through a single biquad, so each channel's output was computed from
+  filter state containing the other channel's samples. On a stereo 1 kHz tone
+  this produced a 2nd harmonic around -38 dBc and left the notch only ~1.4 dB
+  deep instead of the requested 9 dB. Each channel now has its own filter state
+  while sharing coefficients. Measured on the stereo 1 kHz tone: 2nd harmonic
+  -162 dBc, notch depth -9.0 dB. Mono was unaffected, which is why earlier
+  mono-heavy tests missed it.
+- Detector churn on sustained tones: the per-bin temporal spectral floor crept
+  up to a steady tone and released its notch after a few seconds, re-detecting
+  and re-notching it. Replaced with a frequency-local shoulder floor so a
+  sustained tone holds its notch for as long as it persists (measured notch-on
+  for a steady tone: 39% -> 98%).
 - Broadband noise peaks could fill the detector track table and crowd out a
   real feedback tone; track admission is now strength-gated and the weakest
   same-channel track is evicted.
