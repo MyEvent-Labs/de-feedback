@@ -1,0 +1,41 @@
+# Build output
+/build/
+/build-*/
+/out/
+cmake-build-*/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.VC.db
+*.swp
+
+# Compiled
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+*.exe
+*.pdb
+*.ilk
+
+# Audio / generated test material
+/tools/signal-generator/out/
+*.wav
+*.aiff
+*.aif
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local overrides
+.env
+.env.local

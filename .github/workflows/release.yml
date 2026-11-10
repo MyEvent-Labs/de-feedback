@@ -1,0 +1,96 @@
+name: release-alpha
+
+# Produces UNSIGNED development-alpha artifacts and attaches them to a GitHub
+# pre-release. This workflow never claims signing or notarisation. Do not use
+# it for a production-signed release without adding the signing secrets and a
+# final release gate.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DDE_FEEDBACK_BUILD_TESTS=ON
+      - name: Build
+        run: cmake --build build --config Release --parallel
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item -Recurse "build/DeFeedback_artefacts/Release/VST3/MyEvent Labs De-Feedback.vst3" dist/
+          Copy-Item "build/DeFeedback_artefacts/Release/Standalone/MyEvent Labs De-Feedback.exe" dist/
+          Copy-Item README.md, LICENSE, THIRD_PARTY_NOTICES.md dist/
+          Compress-Archive -Path dist/* -DestinationPath de-feedback-windows-unsigned.zip
+          Get-FileHash -Algorithm SHA256 de-feedback-windows-unsigned.zip | Out-File de-feedback-windows-unsigned.zip.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-unsigned
+          path: |
+            de-feedback-windows-unsigned.zip
+            de-feedback-windows-unsigned.zip.sha256
+
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+          -DDE_FEEDBACK_BUILD_TESTS=ON
+      - name: Build
+        run: cmake --build build --parallel
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp -R "build/DeFeedback_artefacts/Release/VST3/MyEvent Labs De-Feedback.vst3" dist/
+          cp -R "build/DeFeedback_artefacts/Release/AU/MyEvent Labs De-Feedback.component" dist/
+          cp -R "build/DeFeedback_artefacts/Release/Standalone/MyEvent Labs De-Feedback.app" dist/
+          cp README.md LICENSE THIRD_PARTY_NOTICES.md dist/
+          zip -r de-feedback-macos-unsigned.zip dist
+          shasum -a 256 de-feedback-macos-unsigned.zip > de-feedback-macos-unsigned.zip.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-unsigned
+          path: |
+            de-feedback-macos-unsigned.zip
+            de-feedback-macos-unsigned.zip.sha256
+
+  pre-release:
+    needs: [windows, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - name: Publish pre-release
+        uses: softprops/action-gh-release@v2
+        with:
+          prerelease: true
+          name: "De-Feedback ${{ github.ref_name }} (ALPHA, unsigned)"
+          body: |
+            **ALPHA / UNSIGNED development build.**
+
+            Test under controlled conditions before any live event. This build is
+            not concert-safe. It is not AI-powered and makes no guaranteed
+            gain-before-feedback claim.
+
+            macOS artifacts are unsigned and not notarised. See the README for
+            Gatekeeper instructions. Do not lower system security globally.
+          files: |
+            *.zip
+            *.sha256

@@ -1,0 +1,97 @@
+name: build
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows (VST3 + Standalone)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DDE_FEEDBACK_BUILD_TESTS=ON -DDE_FEEDBACK_BUILD_TOOLS=ON
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Run tests
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Download pluginval
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_Windows.zip" -OutFile pluginval.zip
+          Expand-Archive pluginval.zip -DestinationPath pluginval
+
+      - name: Validate VST3 with pluginval
+        shell: pwsh
+        run: |
+          $vst3 = "build/DeFeedback_artefacts/Release/VST3/MyEvent Labs De-Feedback.vst3"
+          ./pluginval/pluginval.exe --strictness-level 8 --validate-in-process --skip-gui-tests --output-dir pluginval-out "$vst3"
+
+      - name: Package artifacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item -Recurse "build/DeFeedback_artefacts/Release/VST3/MyEvent Labs De-Feedback.vst3" dist/
+          Copy-Item "build/DeFeedback_artefacts/Release/Standalone/MyEvent Labs De-Feedback.exe" dist/
+          Get-FileHash -Algorithm SHA256 dist/* -ErrorAction SilentlyContinue | Out-File dist/SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: de-feedback-windows
+          path: dist/
+
+  macos:
+    name: macOS (VST3 + AU + Standalone)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+          -DDE_FEEDBACK_BUILD_TESTS=ON
+          -DDE_FEEDBACK_BUILD_TOOLS=ON
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Run tests
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Validate AU with auval
+        run: auval -v aumf Dfdb MyEv || echo "auval not applicable or registration pending"
+
+      - name: Download pluginval
+        run: |
+          curl -sSL -o pluginval.zip "https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_macOS.zip"
+          unzip -o pluginval.zip -d pluginval
+
+      - name: Validate VST3 with pluginval
+        run: |
+          ./pluginval/pluginval.app/Contents/MacOS/pluginval --strictness-level 8 --validate-in-process --skip-gui-tests --output-dir pluginval-out "build/DeFeedback_artefacts/Release/VST3/MyEvent Labs De-Feedback.vst3"
+
+      - name: Package artifacts
+        run: |
+          mkdir -p dist
+          cp -R "build/DeFeedback_artefacts/Release/VST3/MyEvent Labs De-Feedback.vst3" dist/
+          cp -R "build/DeFeedback_artefacts/Release/AU/MyEvent Labs De-Feedback.component" dist/
+          cp -R "build/DeFeedback_artefacts/Release/Standalone/MyEvent Labs De-Feedback.app" dist/
+          (cd dist && shasum -a 256 -r * > SHA256SUMS.txt)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: de-feedback-macos
+          path: dist/
