@@ -32,3 +32,20 @@ target_compile_definitions(defeedback_benchmark PRIVATE
     JUCE_STANDALONE_APPLICATION=1
     JUCE_USE_CURL=0
     JUCE_WEB_BROWSER=0)
+
+juce_add_console_app(defeedback_analyze
+    PRODUCT_NAME "De-Feedback Analyzer")
+
+target_sources(defeedback_analyze PRIVATE analyze/Main.cpp)
+
+target_link_libraries(defeedback_analyze
+    PRIVATE
+        defeedback_core
+        juce::juce_dsp
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_warning_flags)
+
+target_compile_definitions(defeedback_analyze PRIVATE
+    JUCE_STANDALONE_APPLICATION=1
+    JUCE_USE_CURL=0
+    JUCE_WEB_BROWSER=0)

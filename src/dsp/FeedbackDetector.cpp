@@ -163,12 +163,36 @@ void FeedbackDetector::analyseFrame (int channel, int frameIndex) noexcept
         const float mag = std::sqrt (re * re + im * im) * norm;
         const float db  = juce::Decibels::gainToDecibels (mag, kMinDb);
 
-        if (db < floorDb[(size_t) b])
-            floorDb[(size_t) b] = db;
-        else
-            floorDb[(size_t) b] += (db - floorDb[(size_t) b]) * 0.02f;
-
         magDb_[(size_t) b] = db;
+    }
+
+    // Spectral floor: the mean level of two narrow shoulder regions a
+    // frequency-proportional distance either side of each bin. Taking the
+    // lower shoulder keeps a narrow tone on a slope detectable, while
+    // broadband material has shoulders as loud as the bin itself.
+    {
+        for (int b = 0; b < numBins_; ++b)
+        {
+            const int delta = juce::jlimit (config_.floorOffsetBins, config_.floorOffsetMaxBins, b / 12);
+
+            auto shoulderMean = [&] (int from, int to)
+            {
+                const int lo = juce::jlimit (0, numBins_ - 1, from);
+                const int hi = juce::jlimit (0, numBins_ - 1, to);
+                float sum = 0.0f;
+                int count = 0;
+                for (int k = lo; k <= hi; ++k)
+                {
+                    sum += magDb_[(size_t) k];
+                    ++count;
+                }
+                return count > 0 ? sum / (float) count : magDb_[(size_t) b];
+            };
+
+            const float lo = shoulderMean (b - delta - 3, b - delta);
+            const float hi = shoulderMean (b + delta, b + delta + 3);
+            floorDb[(size_t) b] = juce::jmin (lo, hi);
+        }
     }
 
     framePeaks_.clear();
@@ -324,11 +348,13 @@ void FeedbackDetector::updateTracksForChannel (int channel, int frameIndex) noex
             auto& tr = tracks_[(size_t) best];
             matched[(size_t) best] = true;
 
-            tr.frequency  = tr.frequency * 0.7f + freq * 0.3f;
-            tr.prominence = tr.prominence * 0.6f + fp.prominenceDb * 0.4f;
-            tr.q          = tr.q * 0.7f + fp.q * 0.3f;
-            tr.levelDb    = tr.levelDb * 0.6f + fp.magDb * 0.4f;
-            tr.confidence = tr.confidence * 0.6f + fp.inst * 0.4f;
+            // Heavy smoothing keeps a settled notch from being re-tuned or
+            // re-levelled every frame; that modulation is audible as grit.
+            tr.frequency  = tr.frequency * 0.88f + freq * 0.12f;
+            tr.prominence = tr.prominence * 0.8f + fp.prominenceDb * 0.2f;
+            tr.q          = tr.q * 0.88f + fp.q * 0.12f;
+            tr.levelDb    = tr.levelDb * 0.8f + fp.magDb * 0.2f;
+            tr.confidence = tr.confidence * 0.9f + fp.inst * 0.1f;
             tr.lastSeenFrame = frameIndex;
 
             if (fp.inst >= config_.offConfidence)
@@ -347,20 +373,50 @@ void FeedbackDetector::updateTracksForChannel (int channel, int frameIndex) noex
             else if (tr.confidence < config_.offConfidence && tr.offStreak >= config_.offFrames)
                 tr.active = false;
         }
-        else if (numTracks_ < kMaxTracks)
+        else
         {
-            auto& tr = tracks_[(size_t) numTracks_];
-            tr = Track {};
-            tr.channel       = channel;
-            tr.frequency     = freq;
-            tr.prominence    = fp.prominenceDb;
-            tr.q             = fp.q;
-            tr.levelDb       = fp.magDb;
-            tr.confidence    = fp.inst * 0.5f;
-            tr.lastSeenFrame = frameIndex;
-            tr.onStreak      = 1;
-            matched[(size_t) numTracks_] = true;
-            ++numTracks_;
+            // Do not let broadband noise peaks flood the track table. Only
+            // start tracking a peak that is already reasonably strong, and if
+            // the table is full evict the weakest same-channel track so a real
+            // feedback tone can always be tracked through broadband material.
+            if (fp.inst >= config_.onConfidence * 0.5f)
+            {
+                int target = -1;
+
+                if (numTracks_ < kMaxTracks)
+                {
+                    target = numTracks_;
+                    ++numTracks_;
+                }
+                else
+                {
+                    float weakest = fp.inst;
+                    for (int t = 0; t < numTracks_; ++t)
+                    {
+                        const auto& cand = tracks_[(size_t) t];
+                        if (cand.channel == channel && ! matched[(size_t) t] && cand.confidence < weakest)
+                        {
+                            weakest = cand.confidence;
+                            target = t;
+                        }
+                    }
+                }
+
+                if (target >= 0)
+                {
+                    auto& tr = tracks_[(size_t) target];
+                    tr = Track {};
+                    tr.channel       = channel;
+                    tr.frequency     = freq;
+                    tr.prominence    = fp.prominenceDb;
+                    tr.q             = fp.q;
+                    tr.levelDb       = fp.magDb;
+                    tr.confidence    = fp.inst * 0.5f;
+                    tr.lastSeenFrame = frameIndex;
+                    tr.onStreak      = 1;
+                    matched[(size_t) target] = true;
+                }
+            }
         }
     }
 

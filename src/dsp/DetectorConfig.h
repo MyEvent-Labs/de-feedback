@@ -18,6 +18,13 @@ struct DetectorConfig
     float minFrequencyHz      = 80.0f;
     float maxFrequencyHz      = 18000.0f;
 
+    // Frequency-local spectral floor: the level of two narrow shoulder regions
+    // a mildly frequency-proportional distance either side of each bin. A
+    // narrow tone sits well above its shoulders; broadband material has
+    // shoulders as loud as the bin itself, so it produces no prominence.
+    int   floorOffsetBins     = 6;
+    int   floorOffsetMaxBins  = 32;
+
     // Peak prominence above the tracked spectral floor.
     float minProminenceDb     = 10.0f;
     float strongProminenceDb  = 22.0f;

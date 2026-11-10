@@ -39,8 +39,13 @@ Non-finite coefficients fall back to identity.
 For each channel (or the mono sum in linked mode) a 2048-point Hann-windowed FFT
 runs with 50% overlap. Per bin:
 
-1. **Spectral floor** is tracked per bin — it drops instantly to a new minimum
-   and rises slowly. This is a cheap, robust noise-floor estimate.
+1. **Spectral floor** is estimated per bin from the level of two narrow
+   *shoulder* regions a mildly frequency-proportional distance either side of
+   the bin. A narrow tone sits well above its shoulders; broadband material
+   (noise, dense music) has shoulders as loud as the bin itself and so
+   produces no prominence. This is frequency-local: unlike a per-bin temporal
+   floor it does not creep up to a sustained tone, so a steady note keeps its
+   notch instead of churning it on and off.
 2. **Peak picking** selects local maxima above `minProminenceDb` over the floor
    within the 80 Hz – 18 kHz region of interest.
 3. **Features** per peak:

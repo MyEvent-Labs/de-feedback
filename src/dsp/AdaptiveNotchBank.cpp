@@ -91,6 +91,11 @@ AdaptiveNotchBank::Slot* AdaptiveNotchBank::findRecyclableSlot (int lane) noexce
         if (! s.allocated)
             continue;
 
+        // Only recycle a slot that is already silent or ramping out. Resetting
+        // a filter that is still contributing gain would click.
+        if (! s.retiring && std::abs (s.currentGainDb) > 1.0)
+            continue;
+
         const float score = s.retiring ? -1.0f : s.confidence;
         if (score < bestScore)
         {
@@ -133,6 +138,7 @@ void AdaptiveNotchBank::update (const DetectedPeak* peaks, int numPeaks) noexcep
                                         config_.maxCutDb * conf * juce::jlimit (0.25f, 2.0f, config_.strength));
 
         auto* slot = findSlotNear (lane, freq);
+        bool isNewSlot = false;
 
         if (slot == nullptr)
         {
@@ -141,8 +147,13 @@ void AdaptiveNotchBank::update (const DetectedPeak* peaks, int numPeaks) noexcep
                 slot = findRecyclableSlot (lane);
 
             if (slot != nullptr)
+                isNewSlot = true;
+        }
+
+        if (slot != nullptr)
+        {
+            if (isNewSlot)
             {
-                const int laneOfSlot = lane;
                 slot->filter.reset();
                 slot->currentFreq = slot->targetFreq = (double) freq;
                 slot->currentQ    = slot->targetQ    = (double) q;
@@ -150,16 +161,21 @@ void AdaptiveNotchBank::update (const DetectedPeak* peaks, int numPeaks) noexcep
                 slot->targetGainDb  = (double) -cut;
                 slot->allocated = true;
                 slot->retiring  = false;
-                slot->lane      = laneOfSlot;
+                slot->lane      = lane;
+                slot->confidence = conf;
             }
-        }
+            else
+            {
+                // Smooth the confidence used for depth so a settled notch is
+                // not re-levelled by frame-to-frame confidence jitter.
+                slot->confidence = slot->confidence * 0.95f + conf * 0.05f;
+                const float smoothCut = juce::jlimit (0.0f, juce::jmin (config_.maxCutDb, kHardMaxCutDb),
+                                                      config_.maxCutDb * slot->confidence * juce::jlimit (0.25f, 2.0f, config_.strength));
+                slot->targetFreq   = (double) freq;
+                slot->targetQ      = (double) q;
+                slot->targetGainDb = (double) -smoothCut;
+            }
 
-        if (slot != nullptr)
-        {
-            slot->targetFreq  = (double) freq;
-            slot->targetQ     = (double) q;
-            slot->targetGainDb = (double) -cut;
-            slot->confidence  = conf;
             slot->staleFrames = 0;
         }
     }
