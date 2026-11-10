@@ -408,6 +408,41 @@ namespace
         report ("multi_mode_3_tones", pass, detail + "notches=" + juce::String (r.maxNotches));
     }
 
+    std::vector<float> genDriftingFeedback (double f0, double f1, double seconds, double onset)
+    {
+        const int n = (int) (fs * seconds);
+        std::vector<float> s ((size_t) n);
+        juce::Random rng (404);
+        double phase = 0.0;
+        for (int i = 0; i < n; ++i)
+        {
+            const double t = (double) i / fs;
+            const double ramp = juce::jlimit (0.0, 1.0, (t - onset) / 0.4);
+            const double drift = juce::jlimit (0.0, 1.0, (t - onset) / 2.5);
+            const double f = f0 + (f1 - f0) * drift;
+            phase += 2.0 * kPi * f / fs;
+            s[(size_t) i] = (float) (ramp * 0.6 * std::sin (phase) + 0.03 * (rng.nextDouble() * 2.0 - 1.0));
+        }
+        return s;
+    }
+
+    void scenarioDrift()
+    {
+        const double f0 = 900.0, f1 = 1150.0;
+        const auto sig = genDriftingFeedback (f0, f1, 6.0, 0.3);
+        const auto r = runChain (sig, sig, defeedback::parameters::ProtectionMode::normal, 2);
+
+        // The tone reaches f1 by onset + 2.5 s, then holds; measure there.
+        const int from = (int) (fs * 4.8), to = (int) (fs * 5.8);
+        const double inDb = 20.0 * std::log10 (juce::jmax (1.0e-12, binMag (sig, f1, from, to)));
+        const double outDb = 20.0 * std::log10 (juce::jmax (1.0e-12, binMag (r.left, f1, from, to)));
+        const double depth = inDb - outDb;
+
+        const bool pass = r.finite && depth > 3.0 && r.maxNotches <= 2;
+        report ("drift_900_to_1150Hz", pass,
+                "depth@final=" + juce::String (depth, 1) + "dB notches=" + juce::String (r.maxNotches));
+    }
+
     void scenarioRelease()
     {
         const auto sig = genToneBurst (2000.0, 9.0, 0.5, 2.5, 0.8f);
@@ -552,6 +587,7 @@ int main (int argc, char** argv)
     std::printf ("\n-- release / independent stereo / sustained tone --\n");
     scenarioHarmonicFeedback();
     scenarioMultiMode();
+    scenarioDrift();
     scenarioRelease();
     scenarioIndependentStereo();
     scenarioSustainedTone();
