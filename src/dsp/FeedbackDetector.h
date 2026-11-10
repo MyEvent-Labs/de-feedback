@@ -108,6 +108,7 @@ private:
     struct FramePeak
     {
         int   bin = 0;
+        float freqHz = 0.0f;   // parabolic-interpolated (sub-bin) frequency
         float magDb = -120.0f;
         float prominenceDb = 0.0f;
         float q = 20.0f;

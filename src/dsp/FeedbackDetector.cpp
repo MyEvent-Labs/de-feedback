@@ -234,8 +234,18 @@ void FeedbackDetector::analyseFrame (int channel, int frameIndex) noexcept
 
         (void) binHz;
 
+        // Parabolic interpolation on the log-magnitude peak gives a sub-bin
+        // frequency, so a notch lands on the tone rather than the nearest bin.
+        const float mPrev = magDb_[(size_t) juce::jmax (0, b - 1)];
+        const float mNext = magDb_[(size_t) juce::jmin (numBins_ - 1, b + 1)];
+        const float denom = mPrev - 2.0f * mag + mNext;
+        const float frac  = std::abs (denom) > 1.0e-6f
+                              ? juce::jlimit (-0.5f, 0.5f, 0.5f * (mPrev - mNext) / denom)
+                              : 0.0f;
+
         FramePeak fp;
         fp.bin          = b;
+        fp.freqHz       = (float) (((double) b + (double) frac) * sampleRate_ / (double) fftSize_);
         fp.magDb        = mag;
         fp.prominenceDb = prominence;
         fp.q            = q;
@@ -359,7 +369,7 @@ void FeedbackDetector::updateTracksForChannel (int channel, int frameIndex) noex
 
     for (const auto& fp : framePeaks_)
     {
-        const float freq = binToHz (fp.bin, sampleRate_, fftSize_);
+        const float freq = fp.freqHz > 0.0f ? fp.freqHz : binToHz (fp.bin, sampleRate_, fftSize_);
 
         int best = -1;
         float bestDist = 1.0e9f;
