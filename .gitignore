@@ -3,6 +3,8 @@
 /build-*/
 /out/
 cmake-build-*/
+/dist/
+/dist-smoke/
 
 # IDE
 .vs/

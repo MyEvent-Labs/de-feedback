@@ -26,6 +26,11 @@ jobs:
         run: cmake --build build --parallel
       - name: Test
         run: ctest --test-dir build --output-on-failure
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+      - name: Build Windows installer (unsigned alpha)
+        shell: pwsh
+        run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DSrcRoot=build\DeFeedback_artefacts\Release" installer\de-feedback.iss'
       - name: Package
         shell: pwsh
         run: |
@@ -43,7 +48,7 @@ jobs:
             de-feedback-windows-unsigned.zip.sha256
 
   macos:
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - name: Configure

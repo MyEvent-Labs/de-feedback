@@ -1,0 +1,26 @@
+MYEVENT LABS DE-FEEDBACK v0.0.1 ALPHA
+=====================================
+
+This is ALPHA software and this installer is UNSIGNED.
+
+Test under controlled conditions before any live event. This release is not
+validated for show-critical use and does not replace correct loudspeaker
+placement, gain structure, system tuning or a competent live-sound engineer.
+
+De-Feedback v0.0.1 is a deterministic signal processor. It is not AI-powered
+and makes no guaranteed gain-before-feedback improvement claim.
+
+What this installer places on your system:
+
+  * VST3 plugin:
+      C:\Program Files\Common Files\VST3\MyEvent Labs De-Feedback.vst3
+  * Standalone application:
+      C:\Program Files\MyEvent Labs\De-Feedback\
+
+Windows SmartScreen may warn that the publisher is unknown because the build is
+not code-signed. Choose "More info" then "Run anyway" only if you trust this
+build. Do not lower system security settings globally.
+
+Full details: README.md and docs/ALPHA_LIMITATIONS.md in the installed folder
+or in the repository:
+https://github.com/MyEvent-Labs/de-feedback
