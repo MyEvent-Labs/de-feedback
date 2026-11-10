@@ -268,6 +268,19 @@ void FeedbackDetector::analyseFrame (int channel, int frameIndex) noexcept
             (0.5f * fp.prom01 + 0.3f * fp.narrow01 + 0.2f * fp.growth01) * harmonic);
     }
 
+    // Process the strongest peaks first. Frame peaks are otherwise handled in
+    // ascending frequency, so with a full track table a high-frequency tone is
+    // reached last and dropped every frame (it was never tracked above ~10 kHz).
+    std::sort (framePeaks_.begin(), framePeaks_.end(),
+               [] (const FramePeak& a, const FramePeak& b) { return a.inst > b.inst; });
+
+    // Keep only the strongest peaks. The bank can use at most 12 notches per
+    // channel; feeding the track table dozens of weak noise peaks made it churn
+    // and starve a strong high-frequency tone.
+    constexpr size_t kMaxFramePeaks = 16;
+    if (framePeaks_.size() > kMaxFramePeaks)
+        framePeaks_.resize (kMaxFramePeaks);
+
     std::copy (magDb_.begin(), magDb_.end(), prevMagDb_[(size_t) channel].begin());
 
     updateTracksForChannel (channel, frameIndex);
@@ -415,27 +428,24 @@ void FeedbackDetector::updateTracksForChannel (int channel, int frameIndex) noex
                 tr.onStreak = 0;
             }
 
-            // Track growth evidence so a steady non-growing tone can be held
-            // off in the Conservative profile.
-            if (fp.growth01 >= config_.growthThreshold01)
-                ++tr.growthStreak;
-            else if (tr.growthStreak > 0)
-                --tr.growthStreak;
-
+            // Growth evidence: a track must have risen meaningfully since it
+            // was created. This is robust for slow, bin-centred tones, where a
+            // per-frame growth reading is tiny (< 0.1 dB/frame).
             if (! tr.active)
                 tr.active = tr.onStreak >= config_.onFrames
                          && tr.confidence >= config_.onConfidence
-                         && (! config_.requireGrowth || tr.growthStreak >= config_.growthFrames);
+                         && (! config_.requireGrowth
+                             || (tr.levelDb - tr.initialLevelDb) >= config_.growthRiseDb);
             else if (tr.confidence < config_.offConfidence && tr.offStreak >= config_.offFrames)
                 tr.active = false;
         }
         else
         {
-            // Do not let broadband noise peaks flood the track table. Only
-            // start tracking a peak that is already reasonably strong, and if
-            // the table is full evict the weakest track so a real feedback
-            // tone can always be tracked through broadband material.
-            if (fp.inst >= config_.onConfidence * 0.5f)
+            // Do not let broadband noise peaks flood the track table: only
+            // start tracking a peak strong enough to plausibly activate. The
+            // floor is capped so a high-frequency tone whose score sits just
+            // under a strict mode's threshold can still form a track.
+            if (fp.inst >= juce::jmin (0.5f, config_.onConfidence))
             {
                 int target = -1;
 
@@ -466,10 +476,10 @@ void FeedbackDetector::updateTracksForChannel (int channel, int frameIndex) noex
                     tr.prominence    = fp.prominenceDb;
                     tr.q             = fp.q;
                     tr.levelDb       = fp.magDb;
-                    tr.confidence    = fp.inst * 0.5f;
-                    tr.lastSeenFrame = frameIndex;
-                    tr.onStreak      = 1;
-                    tr.growthStreak  = (fp.growth01 >= config_.growthThreshold01) ? 1 : 0;
+                    tr.confidence     = fp.inst * 0.5f;
+                    tr.initialLevelDb = fp.magDb;
+                    tr.lastSeenFrame  = frameIndex;
+                    tr.onStreak       = 1;
                     matched[(size_t) target] = true;
                 }
             }

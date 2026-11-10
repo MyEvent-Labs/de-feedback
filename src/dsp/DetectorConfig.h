@@ -46,8 +46,7 @@ struct DetectorConfig
     // tone (flute, organ, sustained pad) is not notched. Feedback onset grows
     // and passes. Used by the Conservative profile.
     bool  requireGrowth       = false;
-    int   growthFrames        = 4;
-    float growthThreshold01   = 0.15f;
+    float growthRiseDb        = 3.0f;   // required rise since track creation
 
     // Harmonicity: penalise tones that look like a harmonic series. A relative
     // only counts if it is within this window of the peak's own level, so weak

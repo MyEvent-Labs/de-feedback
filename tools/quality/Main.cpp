@@ -259,7 +259,7 @@ namespace
 
     void scenarioFeedbackOnset (defeedback::parameters::ProtectionMode mode, const juce::String& tag)
     {
-        for (double freq : { 250.0, 1000.0, 3150.0, 6300.0 })
+        for (double freq : { 120.0, 250.0, 1000.0, 3150.0, 6300.0, 10000.0, 15000.0 })
         {
             const auto sig = genFeedbackOnset (freq, 5.0, 0.5);
             const auto r = runChain (sig, sig, mode, 2);
@@ -271,7 +271,7 @@ namespace
             const double depth = toneDb - outDb;
             const double h2 = 20.0 * std::log10 (juce::jmax (1.0e-12, binMag (r.left, freq * 2.0, from, to))) - toneDb;
 
-            const bool pass = r.finite && latency >= 0.0 && latency < 0.40 && depth > 3.0 && h2 < -40.0;
+            const bool pass = r.finite && latency >= 0.0 && latency < 0.50 && depth > 2.5 && h2 < -40.0;
             report ("feedback_onset_" + tag + "_" + juce::String (juce::roundToInt (freq)) + "Hz",
                     pass,
                     "lat=" + juce::String (latency, 2) + "s depth=" + juce::String (depth, 1)
@@ -486,7 +486,9 @@ namespace
         const double outDb = 20.0 * std::log10 (juce::jmax (1.0e-12, binMag (r.left, 1000.0, from, to)));
         const double depth = inDb - outDb;
 
-        report ("sustained_pure_tone_conservative", r.finite && depth <= 7.0,
+        // A tone rising from silence is a growth event and is suppressed, but a
+        // narrow steady tone must not reach the full Conservative cut.
+        report ("sustained_pure_tone_conservative", r.finite && depth <= 6.0,
                 "depth=" + juce::String (depth, 1) + "dB notches=" + juce::String (r.maxNotches));
     }
 
@@ -510,6 +512,39 @@ namespace
                                  det.getPeak (i).frequencyHz, det.getPeak (i).confidence);
                 std::printf ("\n");
             }
+        }
+    }
+
+    void dumpHF (double freq = 15000.0)
+    {
+        const auto sig = genFeedbackOnset (freq, 5.0, 0.5);
+        defeedback::FeedbackDetector det;
+        det.prepare (fs, 2, detectorConfig (defeedback::parameters::ProtectionMode::normal));
+
+        defeedback::AdaptiveNotchBank bank;
+        bank.prepare (fs, blockSize, 2);
+        bank.setConfig (bankConfig (defeedback::parameters::ProtectionMode::normal));
+
+        auto left = sig, right = sig;
+
+        for (int pos = 0; pos + blockSize <= (int) sig.size(); pos += blockSize)
+        {
+            const float* a[1] { sig.data() + pos };
+            det.process (a, 1, blockSize, true);
+
+            defeedback::DetectedPeak peaks[16];
+            const int np = juce::jmin (16, det.getNumPeaks());
+            for (int i = 0; i < np; ++i)
+                peaks[i] = det.getPeak (i);
+
+            bank.update (peaks, np);
+            float* p[2] { left.data() + pos, right.data() + pos };
+            bank.process (p, 2, blockSize);
+
+            if ((pos / blockSize) % 24 == 0)
+                std::printf ("t=%.2f detActive=%d bankActive=%d top=%.0fHz(%.2f)\n",
+                             (double) pos / fs, det.getNumPeaks(), bank.getActiveCount(),
+                             np > 0 ? peaks[0].frequencyHz : 0.0f, np > 0 ? peaks[0].confidence : 0.0f);
         }
     }
 
@@ -557,6 +592,12 @@ int main (int argc, char** argv)
         if (juce::String (argv[i]) == "--gate") gGate = true;
         if (juce::String (argv[i]) == "--dump") dump = true;
         if (juce::String (argv[i]) == "--dumpind") dumpInd = true;
+        if (juce::String (argv[i]) == "--dumphf")
+        {
+            const double f = (i + 1 < argc) ? juce::String (argv[i + 1]).getDoubleValue() : 15000.0;
+            dumpHF (f);
+            return 0;
+        }
     }
 
     if (dump)

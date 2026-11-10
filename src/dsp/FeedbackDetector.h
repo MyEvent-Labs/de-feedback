@@ -58,6 +58,17 @@ public:
     int getNumPeaks() const noexcept { return numPeaks_; }
     const DetectedPeak& getPeak (int index) const noexcept { return peaks_[(size_t) index]; }
 
+    // Diagnostics (test tooling only).
+    int getLastFramePeakCount() const noexcept { return (int) framePeaks_.size(); }
+    float debugMaxFrameInst (float& freqOut) const noexcept
+    {
+        float best = 0.0f, bestFreq = 0.0f;
+        for (const auto& fp : framePeaks_)
+            if (fp.inst > best) { best = fp.inst; bestFreq = fp.freqHz; }
+        freqOut = bestFreq;
+        return best;
+    }
+
 private:
     static constexpr int kMaxPeaks    = 16;
     static constexpr int kMaxTracks   = 24;
@@ -74,7 +85,7 @@ private:
         int   channel     = 0;
         int   onStreak    = 0;
         int   offStreak   = 0;
-        int   growthStreak = 0;
+        float initialLevelDb = -120.0f; // level when the track was created
         int   lastSeenFrame = 0;
     };
 
