@@ -17,8 +17,13 @@ All notable changes to De-Feedback are documented here. This project adheres to
   notch markers.
 - Versioned state/preset save and recall that fails safe on malformed state.
 - VST3 and Standalone on Windows; VST3, AU v2 and Standalone on macOS.
-- Headless unit and DSP regression test harness.
-- Offline signal-generator and benchmark tools.
+- Headless unit and DSP regression test harness, plus a headless processor
+  suite and an objective quality harness (`tools/quality`).
+- Offline signal-generator, benchmark, artefact-analysis and screenshot tools.
+- Modern, resizable front end: dark token palette, sectioned layout (spectrum
+  hero; LEVELS and ACTIVE NOTCHES sidebar; PROTECTION / OUTPUT / ACTIONS deck;
+  collapsible ADVANCED drawer; status bar), a segmented protection-mode
+  control and unit-labelled readouts.
 - Native Windows and macOS CI workflows.
 
 ### Known limitations

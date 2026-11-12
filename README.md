@@ -33,8 +33,24 @@ is not equivalent to any commercial product. See
 - Strength, Sensitivity, Max Cut and Recovery controls.
 - Freeze (hold detected notches) and Clear all notches.
 - Click-free bypass and click-free notch add/remove.
-- Input/output trims, input/output metering, active-notch visualisation.
+- Input/output trims, input/output peak + RMS + peak-hold metering, a
+gain-reduction meter, an active-notch list and a real-time spectrum with notch
+markers.
 - Versioned state/preset recall with safe fallback on malformed state.
+- Modern, resizable interface (900x600 minimum, 1600x1000 maximum).
+
+## Interface
+
+![De-Feedback, protecting a 1 kHz feedback tone](docs/screenshots/de-feedback-active-1080x700.png)
+
+Header (brand, preset, bypass); a hero spectrum with a CLEAN / PROTECTING
+status; a sidebar with LEVELS (in/out peak + RMS + peak-hold, gain reduction)
+and ACTIVE NOTCHES; a control deck (PROTECTION: mode + Strength, Sensitivity,
+Max Cut, Recovery — OUTPUT: in/out trim, linked stereo — ACTIONS: Freeze, Clear
+All, Advanced); a collapsible Advanced drawer; and a status bar.
+
+More captures in [`docs/screenshots/`](docs/screenshots): idle at 960x640 and
+the minimum 900x600 layout.
 
 ## Install (alpha)
 
@@ -79,6 +95,12 @@ cmake -S . -B build -DDE_FEEDBACK_BUILD_TESTS=ON -DDE_FEEDBACK_BUILD_TOOLS=ON
 cmake --build build
 ctest --test-dir build --output-on-failure      # or run the tests binary directly
 ```
+
+The offline tools are `defeedback_tests` (unit + DSP regression + a headless
+processor suite), `defeedback_quality` (an objective scenario harness; `--gate`
+fails on a regression), `defeedback_analyze` (artefact/IMD analysis),
+`defeedback_signal_generator` (test fixtures), `defeedback_benchmark` (CPU) and
+`defeedback_screenshot` (offscreen UI captures to PNG).
 
 ## Licence
 

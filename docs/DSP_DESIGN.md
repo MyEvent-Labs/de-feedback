@@ -37,7 +37,9 @@ Non-finite coefficients fall back to identity.
 ## Detector
 
 For each channel (or the mono sum in linked mode) a 2048-point Hann-windowed FFT
-runs with 50% overlap. Per bin:
+runs with 75% overlap (hop = fftSize/4), which keeps onset latency low. Each
+channel keeps its own analysis state (ring buffer, spectral floor, growth
+history and track table), so channels never compete for slots. Per bin:
 
 1. **Spectral floor** is estimated per bin from the level of two narrow
    *shoulder* regions a mildly frequency-proportional distance either side of
@@ -47,11 +49,16 @@ runs with 50% overlap. Per bin:
    floor it does not creep up to a sustained tone, so a steady note keeps its
    notch instead of churning it on and off.
 2. **Peak picking** selects local maxima above `minProminenceDb` over the floor
-   within the 80 Hz – 18 kHz region of interest.
+   within the 80 Hz – 18 kHz region of interest. Each peak's frequency is
+   parabolically interpolated for sub-bin accuracy, and peaks are scored
+   strongest-first and capped to the strongest 16 before tracking, so a
+   high-frequency tone is not starved by broadband noise peaks.
 3. **Features** per peak:
    - prominence above the floor;
    - narrowness (a −6 dB width estimate → a Q estimate);
-   - growth (change vs the previous frame at that bin, in dB/frame).
+   - growth (change vs the previous frame at that bin, in dB/frame), used as a
+     confidence term and, in Conservative mode, as a rise-since-creation gate
+     that rejects steady, non-growing tones.
 4. **Harmonicity penalty** discounts a peak if several other strong frame peaks
    line up at harmonic ratios of it — musical tones and voiced speech look like
    a harmonic series, feedback usually does not.
