@@ -56,7 +56,7 @@ namespace
         }
     }
 
-    bool render (defeedback::DeFeedbackProcessor& p, int w, int h, const juce::File& file)
+    bool render (defeedback::DeFeedbackProcessor& p, int w, int h, const juce::File& file, bool openAdvanced = false)
     {
         std::unique_ptr<juce::AudioProcessorEditor> editor (p.createEditor());
         if (editor == nullptr)
@@ -64,6 +64,11 @@ namespace
 
         editor->setSize (w, h);
         editor->setVisible (true);
+
+        if (openAdvanced)
+            for (auto* child : editor->getChildren())
+                if (auto* button = dynamic_cast<juce::Button*> (child); button != nullptr && button->getButtonText() == "ADVANCED")
+                    button->triggerClick();
 
         // Let the child timers tick so meters/spectrum/notch list populate.
         juce::MessageManager::getInstance()->runDispatchLoopUntil (500);
@@ -90,6 +95,20 @@ int main (int argc, char** argv)
     const juce::File outDir = argc > 1 ? juce::File (juce::String (argv[1]))
                                        : juce::File::getCurrentWorkingDirectory().getChildFile ("docs/screenshots");
 
+    // The other two skins, same scene. Set explicitly (and never remembered) so
+    // the captures do not depend on this machine's saved skin.
+    for (auto skin : { std::pair<defeedback::Skin, const char*> { defeedback::Skin::console, "console" },
+                       std::pair<defeedback::Skin, const char*> { defeedback::Skin::instrument, "instrument" } })
+    {
+        defeedback::Palette::setSkin (skin.first, false);
+        defeedback::DeFeedbackProcessor proc;
+        proc.prepareToPlay (48000.0, 512);
+        feed (proc, 1000.0, 2.2);
+        render (proc, 1080, 700, outDir.getChildFile (juce::String ("de-feedback-skin-") + skin.second + "-1080x700.png"));
+    }
+
+    defeedback::Palette::setSkin (defeedback::Skin::scope, false);
+
     // Protect an active, on-screen snapshot.
     {
         defeedback::DeFeedbackProcessor proc;
@@ -112,6 +131,14 @@ int main (int argc, char** argv)
         proc.prepareToPlay (48000.0, 512);
         feed (proc, 2000.0, 2.0);
         render (proc, 900, 600, outDir.getChildFile ("de-feedback-compact-900x600.png"));
+    }
+
+    // Advanced drawer open.
+    {
+        defeedback::DeFeedbackProcessor proc;
+        proc.prepareToPlay (48000.0, 512);
+        feed (proc, 3150.0, 2.2);
+        render (proc, 1080, 700, outDir.getChildFile ("de-feedback-advanced-1080x700.png"), true);
     }
 
     return 0;

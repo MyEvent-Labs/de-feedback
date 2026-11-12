@@ -99,7 +99,7 @@ jobs:
           cp -R "build/DeFeedback_artefacts/Release/VST3/MyEvent Labs De-Feedback.vst3" dist/
           cp -R "build/DeFeedback_artefacts/Release/AU/MyEvent Labs De-Feedback.component" dist/
           cp -R "build/DeFeedback_artefacts/Release/Standalone/MyEvent Labs De-Feedback.app" dist/
-          (cd dist && shasum -a 256 -r * > SHA256SUMS.txt)
+          (cd dist && find . -type f ! -name SHA256SUMS.txt -exec shasum -a 256 {} + > SHA256SUMS.txt)
 
       - uses: actions/upload-artifact@v4
         with:

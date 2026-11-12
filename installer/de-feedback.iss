@@ -1,13 +1,16 @@
 ; MyEvent Labs De-Feedback - Windows installer (ALPHA, unsigned)
 ;
-; Build (from the repository root):
-;   ISCC /DSrcRoot="build-configure\DeFeedback_artefacts\configure" installer\de-feedback.iss
+; Build (from the repository root), after an optimised build:
+;   cmake -S . -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release
+;   cmake --build build-release
+;   ISCC installer\de-feedback.iss
 ;
 ; Smoke test build (no admin, install into a temp folder):
-;   ISCC /DSMOKE_TEST /DSrcRoot="..." /DOutDir="..." installer\de-feedback.iss
+;   ISCC /DSMOKE_TEST /DOutDir="..." installer\de-feedback.iss
+;   <setup>.exe /VERYSILENT /NOICONS /DIR="<tmp>\app" /VST3DIR="<tmp>\vst3"
 
 #ifndef SrcRoot
-  #define SrcRoot "..\build-configure\DeFeedback_artefacts\configure"
+  #define SrcRoot "..\build-release\DeFeedback_artefacts\Release"
 #endif
 #ifndef RepoRoot
   #define RepoRoot ".."

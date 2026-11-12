@@ -34,8 +34,8 @@ is not equivalent to any commercial product. See
 - Freeze (hold detected notches) and Clear all notches.
 - Click-free bypass and click-free notch add/remove.
 - Input/output trims, input/output peak + RMS + peak-hold metering, a
-gain-reduction meter, an active-notch list and a real-time spectrum with notch
-markers.
+gain-reduction meter and a real-time spectrum with a live cut curve and a tag
+per active notch.
 - Versioned state/preset recall with safe fallback on malformed state.
 - Modern, resizable interface (900x600 minimum, 1600x1000 maximum).
 
@@ -43,14 +43,26 @@ markers.
 
 ![De-Feedback, protecting a 1 kHz feedback tone](docs/screenshots/de-feedback-active-1080x700.png)
 
-Header (brand, preset, bypass); a hero spectrum with a CLEAN / PROTECTING
-status; a sidebar with LEVELS (in/out peak + RMS + peak-hold, gain reduction)
-and ACTIVE NOTCHES; a control deck (PROTECTION: mode + Strength, Sensitivity,
-Max Cut, Recovery — OUTPUT: in/out trim, linked stereo — ACTIONS: Freeze, Clear
-All, Advanced); a collapsible Advanced drawer; and a status bar.
+The analyser fills the window: signal in lime, and every cut the plugin makes in
+coral, drawn as a dip in the CUT curve with a tag showing its frequency and
+depth. A large read-out top right shows the deepest cut being applied right now
+(or LISTENING / BYPASSED). In, out and gain-reduction meters with peak hold
+float on the right. A dock along the bottom holds the protection mode, Strength,
+Sensitivity, Max Cut, Recovery, in/out trim, and Freeze, Clear, Advanced and
+Bypass. Advanced opens a drawer (frequency range, notch count, Q bias, linked
+stereo). Presets and About live under MENU. The footer carries the MyEvent Labs
+link, the version and engine status. Double-click a knob to reset it.
 
-More captures in [`docs/screenshots/`](docs/screenshots): idle at 960x640 and
-the minimum 900x600 layout.
+Three skins share this layout, chosen under MENU > Skin and remembered per user
+on each computer: **Scope** (default, shown above), **Console** (metal knobs,
+LED ladder meters, amber trace) and **Instrument** (ink on paper, orange cuts).
+
+| Console | Instrument |
+| --- | --- |
+| ![Console skin](docs/screenshots/de-feedback-skin-console-1080x700.png) | ![Instrument skin](docs/screenshots/de-feedback-skin-instrument-1080x700.png) |
+
+More captures in [`docs/screenshots/`](docs/screenshots): idle at 960x640, the
+minimum 900x600 layout, and the Advanced drawer open.
 
 ## Install (alpha)
 

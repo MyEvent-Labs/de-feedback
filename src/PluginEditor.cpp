@@ -8,40 +8,35 @@
 namespace defeedback
 {
 
+namespace
+{
+    constexpr int kMargin = 16;
+    constexpr int kFooterH = 26;
+    constexpr int kDockH = 124;
+    constexpr int kAdvancedH = 108;
+    constexpr int kMeterW = 98;
+
+    juce::Font brandFont() { return DeFeedbackLookAndFeel::typeface (15.0f, true).withExtraKerningFactor (0.26f); }
+    juce::Font linkFont()  { return DeFeedbackLookAndFeel::typeface (13.5f); }
+}
+
 DeFeedbackEditor::DeFeedbackEditor (DeFeedbackProcessor& processor)
     : juce::AudioProcessorEditor (&processor),
       proc_ (processor),
       spectrum_ (processor),
-      meter_ (processor),
-      notchDisplay_ (processor)
+      meter_ (processor)
 {
+    Palette::loadSavedSkin();
     setLookAndFeel (&lnf_);
-    setResizable (true, true);
-    setResizeLimits (900, 600, 1600, 1000);
-    setSize (1080, 700);
 
-    // Panels.
-    for (auto* p : { &spectrumPanel_, &levelsPanel_, &notchesPanel_, &protectionPanel_,
-                     &outputPanel_, &actionsPanel_, &advancedPanel_ })
-        addAndMakeVisible (*p);
+    addAndMakeVisible (spectrum_);
+    addAndMakeVisible (meter_);
 
-    spectrumPanel_.addAndMakeVisible (spectrum_);
-    levelsPanel_.addAndMakeVisible (meter_);
-    notchesPanel_.addAndMakeVisible (notchDisplay_);
-
-    // Header actions.
-    bypassAttach_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (proc_.apvts, parameters::bypass, bypassButton_);
-    bypassButton_.setClickingTogglesState (true);
-    addAndMakeVisible (bypassButton_);
-
-    presetButton_.onClick = [this] { showPresetMenu(); };
-    addAndMakeVisible (presetButton_);
-
-    aboutButton_.onClick = [this] { showAbout(); };
-    addAndMakeVisible (aboutButton_);
+    menuButton_.onClick = [this] { showMenu(); };
+    addAndMakeVisible (menuButton_);
 
     // Protection mode.
-    protectionPanel_.addAndMakeVisible (modeControl_);
+    addAndMakeVisible (modeControl_);
     if (auto* modeParam = proc_.apvts.getParameter (parameters::mode))
     {
         modeAttachment_ = std::make_unique<juce::ParameterAttachment> (*modeParam,
@@ -50,44 +45,61 @@ DeFeedbackEditor::DeFeedbackEditor (DeFeedbackProcessor& processor)
         modeControl_.onChange = [this] (int idx) { modeAttachment_->setValueAsCompleteGesture ((float) idx); };
     }
 
-    // Protection knobs.
-    configureKnob (protectionPanel_, strengthSlider_, strengthLabel_, "STRENGTH", strengthAttach_, parameters::strength);
-    configureKnob (protectionPanel_, sensitivitySlider_, sensitivityLabel_, "SENSITIVITY", sensitivityAttach_, parameters::sensitivity);
-    configureKnob (protectionPanel_, maxCutSlider_, maxCutLabel_, "MAX CUT", maxCutAttach_, parameters::maxCutDb);
-    configureKnob (protectionPanel_, recoverySlider_, recoveryLabel_, "RECOVERY", recoveryAttach_, parameters::recoverySeconds);
+    // Dock knobs.
+    configureKnob (strengthSlider_, strengthLabel_, "STRENGTH", strengthAttach_, parameters::strength);
+    configureKnob (sensitivitySlider_, sensitivityLabel_, "SENSITIVITY", sensitivityAttach_, parameters::sensitivity);
+    configureKnob (maxCutSlider_, maxCutLabel_, "MAX CUT", maxCutAttach_, parameters::maxCutDb);
+    configureKnob (recoverySlider_, recoveryLabel_, "RECOVERY", recoveryAttach_, parameters::recoverySeconds);
+    configureKnob (inputTrimSlider_, inputTrimLabel_, "IN TRIM", inputTrimAttach_, parameters::inputTrimDb);
+    configureKnob (outputTrimSlider_, outputTrimLabel_, "OUT TRIM", outputTrimAttach_, parameters::outputTrimDb);
 
-    // Output knobs.
-    configureKnob (outputPanel_, inputTrimSlider_, inputTrimLabel_, "IN TRIM", inputTrimAttach_, parameters::inputTrimDb);
-    configureKnob (outputPanel_, outputTrimSlider_, outputTrimLabel_, "OUT TRIM", outputTrimAttach_, parameters::outputTrimDb);
+    // Advanced drawer.
+    configureKnob (minFreqSlider_, minFreqLabel_, "MIN FREQ", minFreqAttach_, parameters::minFrequencyHz);
+    configureKnob (maxFreqSlider_, maxFreqLabel_, "MAX FREQ", maxFreqAttach_, parameters::maxFrequencyHz);
+    configureKnob (maxNotchesSlider_, maxNotchesLabel_, "NOTCHES", maxNotchesAttach_, parameters::maxNotches);
+    configureKnob (qBiasSlider_, qBiasLabel_, "Q BIAS", qBiasAttach_, parameters::qBias);
 
-    stereoLinkAttach_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (proc_.apvts, parameters::stereoLink, stereoLinkButton_);
+    stereoLinkAttach_ = std::make_unique<ButtonAttachment> (proc_.apvts, parameters::stereoLink, stereoLinkButton_);
     stereoLinkButton_.setClickingTogglesState (true);
-    outputPanel_.addAndMakeVisible (stereoLinkButton_);
-
-    // Advanced knobs.
-    configureKnob (advancedPanel_, minFreqSlider_, minFreqLabel_, "MIN FREQ", minFreqAttach_, parameters::minFrequencyHz);
-    configureKnob (advancedPanel_, maxFreqSlider_, maxFreqLabel_, "MAX FREQ", maxFreqAttach_, parameters::maxFrequencyHz);
-    configureKnob (advancedPanel_, maxNotchesSlider_, maxNotchesLabel_, "NOTCHES", maxNotchesAttach_, parameters::maxNotches);
-    configureKnob (advancedPanel_, qBiasSlider_, qBiasLabel_, "Q BIAS", qBiasAttach_, parameters::qBias);
+    addAndMakeVisible (stereoLinkButton_);
 
     // Actions.
-    freezeAttach_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (proc_.apvts, parameters::freeze, freezeButton_);
+    freezeAttach_ = std::make_unique<ButtonAttachment> (proc_.apvts, parameters::freeze, freezeButton_);
     freezeButton_.setClickingTogglesState (true);
-    actionsPanel_.addAndMakeVisible (freezeButton_);
+    addAndMakeVisible (freezeButton_);
 
     clearButton_.onClick = [this] { proc_.requestClearNotches(); };
-    actionsPanel_.addAndMakeVisible (clearButton_);
+    addAndMakeVisible (clearButton_);
 
     advancedButton_.setClickingTogglesState (true);
-    advancedButton_.onClick = [this] { advancedVisible_ = advancedButton_.getToggleState(); rebuildAdvanced(); resized(); };
-    actionsPanel_.addAndMakeVisible (advancedButton_);
+    advancedButton_.onClick = [this] { setAdvancedVisible (advancedButton_.getToggleState()); };
+    addAndMakeVisible (advancedButton_);
 
-    statusLabel_.setFont (DeFeedbackLookAndFeel::typeface (11.0f));
-    statusLabel_.setColour (juce::Label::textColourId, Palette::textDim);
+    bypassAttach_ = std::make_unique<ButtonAttachment> (proc_.apvts, parameters::bypass, bypassButton_);
+    bypassButton_.setClickingTogglesState (true);
+    addAndMakeVisible (bypassButton_);
+
+    // Footer: credit link, version, engine status.
+    creditLink_.setButtonText ("Developed by MyEvent Labs");
+    creditLink_.setURL (juce::URL (DEFEEDBACK_HOMEPAGE));
+    creditLink_.setFont (linkFont(), false, juce::Justification::centredLeft);
+    addAndMakeVisible (creditLink_);
+
+    versionLabel_.setText ("v" DEFEEDBACK_VERSION " ALPHA", juce::dontSendNotification);
+    versionLabel_.setFont (DeFeedbackLookAndFeel::mono (10.5f));
+    addAndMakeVisible (versionLabel_);
+
+    statusLabel_.setFont (DeFeedbackLookAndFeel::mono (10.5f));
     statusLabel_.setJustificationType (juce::Justification::centredRight);
     addAndMakeVisible (statusLabel_);
 
-    rebuildAdvanced();
+    applySkin();
+    setAdvancedVisible (false);
+
+    setResizable (true, true);
+    setResizeLimits (900, 600, 1600, 1000);
+    setSize (1080, 700);
+
     startTimerHz (12);
 }
 
@@ -97,23 +109,21 @@ DeFeedbackEditor::~DeFeedbackEditor()
     setLookAndFeel (nullptr);
 }
 
-void DeFeedbackEditor::configureKnob (juce::Component& parent, juce::Slider& slider, juce::Label& label, const juce::String& name,
-                                      std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>& attachmentPtr,
-                                      const juce::String& paramId)
+void DeFeedbackEditor::configureKnob (juce::Slider& slider, juce::Label& label, const juce::String& name,
+                                      std::unique_ptr<SliderAttachment>& attachmentPtr, const juce::String& paramId)
 {
+    // The value is drawn inside the ring by the look-and-feel, so no text box.
     slider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
-    slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 74, 15);
-    slider.setColour (juce::Slider::textBoxTextColourId, Palette::text);
-    slider.setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
-    parent.addAndMakeVisible (slider);
+    slider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
+    slider.setRepaintsOnMouseActivity (true);
+    addAndMakeVisible (slider);
 
     label.setText (name, juce::dontSendNotification);
     label.setJustificationType (juce::Justification::centred);
-    label.setFont (DeFeedbackLookAndFeel::typeface (10.0f, true));
-    label.setColour (juce::Label::textColourId, Palette::textDim);
-    parent.addAndMakeVisible (label);
+    label.setFont (DeFeedbackLookAndFeel::caps (10.5f));
+    addAndMakeVisible (label);
 
-    attachmentPtr = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (proc_.apvts, paramId, slider);
+    attachmentPtr = std::make_unique<SliderAttachment> (proc_.apvts, paramId, slider);
 
     // Show the parameter's own formatted text (with unit), e.g. "9.0 dB".
     if (auto* param = proc_.apvts.getParameter (paramId))
@@ -124,30 +134,49 @@ void DeFeedbackEditor::configureKnob (juce::Component& parent, juce::Slider& sli
             const auto value = param->getText (param->convertTo0to1 ((float) v), 0);
             return unit.isEmpty() ? value : value + " " + unit;
         };
-        slider.valueFromTextFunction = [param] (const juce::String& t) { return (double) param->convertFrom0to1 (param->getValueForText (t)); };
-        slider.updateText();
     }
 }
 
-void DeFeedbackEditor::rebuildAdvanced()
+void DeFeedbackEditor::setAdvancedVisible (bool shouldShow)
 {
-    // Children live inside the panel, so hiding it hides them too.
-    advancedPanel_.setVisible (advancedVisible_);
+    advancedVisible_ = shouldShow;
+
+    for (auto* c : std::initializer_list<juce::Component*> { &minFreqSlider_, &maxFreqSlider_, &maxNotchesSlider_, &qBiasSlider_,
+                                                             &minFreqLabel_, &maxFreqLabel_, &maxNotchesLabel_, &qBiasLabel_,
+                                                             &stereoLinkButton_ })
+        c->setVisible (shouldShow);
+
+    resized();
+    repaint();
+}
+
+void DeFeedbackEditor::applySkin()
+{
+    // Colours that components cache, as opposed to reading the palette while painting.
+    lnf_.refreshColours();
+    bypassButton_.setColour (juce::TextButton::buttonOnColourId, Palette::danger);
+
+    for (auto* child : getChildren())
+        if (auto* label = dynamic_cast<juce::Label*> (child))
+            label->setColour (juce::Label::textColourId, Palette::textDim);
+
+    sendLookAndFeelChange();
+    repaint();
 }
 
 void DeFeedbackEditor::timerCallback()
 {
     const auto& snap = proc_.getUiSnapshot();
+    const auto sep = "  " + middleDot() + "  ";
 
     juce::String status;
-    status << juce::String (juce::roundToInt (proc_.getSampleRate() / 1000.0)) << " kHz   "
-           << proc_.getBlockSize() << " smp   "
-           << "lat " << proc_.getLatencySamples() << "   "
-           << "notches " << snap.activeNotches.load() << "   "
+    status << juce::String (juce::roundToInt (proc_.getSampleRate() / 1000.0)) << " kHz" << sep
+           << proc_.getBlockSize() << " smp" << sep
+           << "latency " << proc_.getLatencySamples() << sep
            << "load " << juce::String (snap.dspLoad.load() * 100.0f, 1) << "%";
 
     if (snap.overloads.load() > 0)
-        status << "   OVERLOAD";
+        status << sep << "OVERLOAD";
 
     statusLabel_.setText (status, juce::dontSendNotification);
 }
@@ -156,140 +185,122 @@ void DeFeedbackEditor::paint (juce::Graphics& g)
 {
     g.fillAll (Palette::background);
 
-    // Header band.
-    auto header = getLocalBounds().removeFromTop (56);
-    g.setColour (Palette::surface);
-    g.fillRect (header);
-    g.setColour (Palette::outline);
-    g.drawHorizontalLine (header.getBottom() - 1, 0.0f, (float) getWidth());
+    const auto view = spectrum_.getBounds().toFloat();
+    g.setColour (Palette::screen);
+    g.fillRect (view);
 
-    g.setColour (Palette::accent);
-    g.setFont (DeFeedbackLookAndFeel::typeface (15.0f, true));
-    g.drawText ("MyEvent Labs", header.reduced (16, 0).withWidth (150).withTrimmedTop (-1),
-                juce::Justification::centredLeft, false);
+    if (Palette::glow)
+    {
+        // A faint bloom in the signal colour behind the analyser.
+        const auto cx = view.getCentreX();
+        const auto cy = view.getY() + view.getHeight() * 0.72f;
+        g.setGradientFill (juce::ColourGradient (Palette::accent.withAlpha (0.075f), cx, cy,
+                                                 Palette::accent.withAlpha (0.0f), cx + view.getWidth() * 0.55f, cy, true));
+        g.fillRect (view);
+    }
 
+    auto drawPanel = [&] (juce::Rectangle<int> r)
+    {
+        g.setColour (Palette::surface);
+        g.fillRoundedRectangle (r.toFloat(), Palette::radiusPanel);
+        g.setColour (Palette::outline);
+        g.drawRoundedRectangle (r.toFloat().reduced (0.5f), Palette::radiusPanel, 1.0f);
+    };
+
+    drawPanel (dockBounds_);
+    if (advancedVisible_)
+        drawPanel (advancedBounds_);
+}
+
+void DeFeedbackEditor::paintOverChildren (juce::Graphics& g)
+{
     g.setColour (Palette::text);
-    g.setFont (DeFeedbackLookAndFeel::typeface (15.0f, true));
-    g.drawText ("De-Feedback", header.withTrimmedLeft (168).withWidth (150),
-                juce::Justification::centredLeft, false);
+    g.setFont (brandFont());
+    g.drawText ("DE-FEEDBACK", brandBounds_, juce::Justification::centredLeft, false);
 
-    // ALPHA chip.
-    const juce::Rectangle<int> chip (330, 19, 62, 18);
     g.setColour (Palette::warning.withAlpha (0.16f));
-    g.fillRoundedRectangle (chip.toFloat(), 4.0f);
+    g.fillRoundedRectangle (chipBounds_.toFloat(), 4.0f);
     g.setColour (Palette::warning);
-    g.setFont (DeFeedbackLookAndFeel::typeface (10.0f, true));
-    g.drawText ("ALPHA", chip, juce::Justification::centred, false);
-
-    // Footer separator.
-    g.setColour (Palette::outline);
-    g.drawHorizontalLine (getHeight() - 27, 0.0f, (float) getWidth());
+    g.setFont (DeFeedbackLookAndFeel::caps (10.0f));
+    g.drawText ("ALPHA", chipBounds_, juce::Justification::centred, false);
 }
 
 void DeFeedbackEditor::resized()
 {
     auto area = getLocalBounds();
 
-    auto header = area.removeFromTop (56);
-    header.removeFromRight (14);
-    bypassButton_.setBounds (header.removeFromRight (96).reduced (0, 14));
-    header.removeFromRight (8);
-    presetButton_.setBounds (header.removeFromRight (84).reduced (0, 14));
-    header.removeFromRight (8);
-    aboutButton_.setBounds (header.removeFromRight (68).reduced (0, 14));
+    // Footer.
+    auto footer = area.removeFromBottom (kFooterH).reduced (kMargin + 6, 0).withTrimmedBottom (4);
+    creditLink_.setBounds (footer.removeFromLeft (juce::GlyphArrangement::getStringWidthInt (linkFont(), creditLink_.getButtonText()) + 8));
+    footer.removeFromLeft (10);
+    versionLabel_.setBounds (footer.removeFromLeft (120));
+    statusLabel_.setBounds (footer);
 
-    auto footer = area.removeFromBottom (28);
-    statusLabel_.setBounds (footer.reduced (16, 0));
-
-    auto body = area.reduced (16, 14);
-
-    const int advH = advancedVisible_ ? 122 : 0;
-    const int deckH = 156;
+    // Dock and (optional) advanced drawer.
+    area.removeFromBottom (4);
+    dockBounds_ = area.removeFromBottom (kDockH).reduced (kMargin, 0);
 
     if (advancedVisible_)
-        advancedPanel_.setBounds (body.removeFromBottom (advH).withTrimmedBottom (0));
-
-    auto deck = body.removeFromBottom (deckH);
-    body.removeFromBottom (12);
-
-    // Top row: spectrum (hero) + read-out sidebar.
-    auto sidebar = body.removeFromRight (300);
-    body.removeFromRight (12);
-
-    spectrumPanel_.setBounds (body);
-    spectrum_.setBounds (spectrumPanel_.getContentBounds());
-
-    levelsPanel_.setBounds (sidebar.removeFromTop (juce::roundToInt ((float) sidebar.getHeight() * 0.56f)));
-    sidebar.removeFromTop (12);
-    notchesPanel_.setBounds (sidebar);
-    meter_.setBounds (levelsPanel_.getContentBounds());
-    notchDisplay_.setBounds (notchesPanel_.getContentBounds());
-
-    // Control deck.
-    const int outW = 226, actW = 176;
-    protectionPanel_.setBounds (deck.removeFromLeft (deck.getWidth() - outW - actW - 24));
-    deck.removeFromLeft (12);
-    outputPanel_.setBounds (deck.removeFromLeft (outW));
-    deck.removeFromLeft (12);
-    actionsPanel_.setBounds (deck);
-
     {
-        auto pc = protectionPanel_.getContentBounds();
-        modeControl_.setBounds (pc.removeFromTop (26).withWidth (juce::jmin (348, pc.getWidth())));
-        pc.removeFromTop (10);
-        auto row = pc;
-        const int kw = juce::jmax (54, row.getWidth() / 4);
-        auto place = [&] (juce::Slider& s, juce::Label& l)
-        {
-            auto col = row.removeFromLeft (kw);
-            l.setBounds (col.removeFromTop (14));
-            s.setBounds (col);
-        };
-        place (strengthSlider_, strengthLabel_);
-        place (sensitivitySlider_, sensitivityLabel_);
-        place (maxCutSlider_, maxCutLabel_);
-        place (recoverySlider_, recoveryLabel_);
+        area.removeFromBottom (8);
+        advancedBounds_ = area.removeFromBottom (kAdvancedH).reduced (kMargin, 0);
     }
 
-    {
-        auto oc = outputPanel_.getContentBounds();
-        stereoLinkButton_.setBounds (oc.removeFromBottom (20));
-        oc.removeFromBottom (4);
-        auto row = oc;
-        const int ow = juce::jmax (54, row.getWidth() / 2);
-        auto place = [&] (juce::Slider& s, juce::Label& l)
-        {
-            auto col = row.removeFromLeft (ow);
-            l.setBounds (col.removeFromTop (14));
-            s.setBounds (col);
-        };
-        place (inputTrimSlider_, inputTrimLabel_);
-        place (outputTrimSlider_, outputTrimLabel_);
-    }
+    area.removeFromBottom (6);
 
+    // Analyser fills everything else; meters and brand float over it.
+    spectrum_.setBounds (area);
+    meter_.setBounds (area.getRight() - kMargin - kMeterW, area.getY() + 16, kMeterW, area.getHeight() - 44);
+    spectrum_.setContentRight (area.getWidth() - kMargin - kMeterW - 18);
+
+    brandBounds_ = { 22, 16, juce::GlyphArrangement::getStringWidthInt (brandFont(), "DE-FEEDBACK") + 4, 24 };
+    chipBounds_ = { brandBounds_.getRight() + 10, 19, 50, 18 };
+    menuButton_.setBounds (chipBounds_.getRight() + 10, 16, 62, 24);
+
+    auto placeKnob = [] (juce::Rectangle<int> column, juce::Slider& s, juce::Label& l, float scale)
     {
-        auto ac = actionsPanel_.getContentBounds();
-        freezeButton_.setBounds (ac.removeFromTop (32));
-        ac.removeFromTop (8);
-        clearButton_.setBounds (ac.removeFromTop (32));
-        ac.removeFromTop (8);
-        advancedButton_.setBounds (ac.removeFromTop (32));
+        l.setBounds (column.removeFromBottom (16));
+        s.setBounds (column.withSizeKeepingCentre (column.getWidth(), juce::roundToInt ((float) column.getHeight() * scale)));
+    };
+
+    // Dock: mode | protection knobs | trims | actions.
+    {
+        auto dock = dockBounds_.reduced (16, 10);
+
+        modeControl_.setBounds (dock.removeFromLeft (132));
+        dock.removeFromLeft (14);
+
+        auto buttons = dock.removeFromRight (176).withSizeKeepingCentre (176, 76);
+        dock.removeFromRight (10);
+
+        auto top = buttons.removeFromTop (34);
+        buttons.removeFromTop (8);
+        freezeButton_.setBounds (top.removeFromLeft (84));
+        clearButton_.setBounds (top.withTrimmedLeft (8));
+        advancedButton_.setBounds (buttons.removeFromLeft (84));
+        bypassButton_.setBounds (buttons.withTrimmedLeft (8));
+
+        const float unit = juce::jmin (132.0f, (float) dock.getWidth() / 5.6f);
+        auto column = [&] (float weight) { return dock.removeFromLeft (juce::roundToInt (unit * weight)); };
+
+        placeKnob (column (1.0f), strengthSlider_, strengthLabel_, 1.0f);
+        placeKnob (column (1.0f), sensitivitySlider_, sensitivityLabel_, 1.0f);
+        placeKnob (column (1.0f), maxCutSlider_, maxCutLabel_, 1.0f);
+        placeKnob (column (1.0f), recoverySlider_, recoveryLabel_, 1.0f);
+        placeKnob (column (0.8f), inputTrimSlider_, inputTrimLabel_, 0.8f);
+        placeKnob (column (0.8f), outputTrimSlider_, outputTrimLabel_, 0.8f);
     }
 
     if (advancedVisible_)
     {
-        auto ac = advancedPanel_.getContentBounds();
-        const int aw = juce::jmax (54, ac.getWidth() / 4);
-        auto place = [&] (juce::Slider& s, juce::Label& l)
-        {
-            auto col = ac.removeFromLeft (aw);
-            l.setBounds (col.removeFromTop (14));
-            s.setBounds (col);
-        };
-        place (minFreqSlider_, minFreqLabel_);
-        place (maxFreqSlider_, maxFreqLabel_);
-        place (maxNotchesSlider_, maxNotchesLabel_);
-        place (qBiasSlider_, qBiasLabel_);
+        auto drawer = advancedBounds_.reduced (16, 8);
+        stereoLinkButton_.setBounds (drawer.removeFromRight (150).withSizeKeepingCentre (150, 22));
+
+        const int w = juce::jmin (132, drawer.getWidth() / 4);
+        placeKnob (drawer.removeFromLeft (w), minFreqSlider_, minFreqLabel_, 1.0f);
+        placeKnob (drawer.removeFromLeft (w), maxFreqSlider_, maxFreqLabel_, 1.0f);
+        placeKnob (drawer.removeFromLeft (w), maxNotchesSlider_, maxNotchesLabel_, 1.0f);
+        placeKnob (drawer.removeFromLeft (w), qBiasSlider_, qBiasLabel_, 1.0f);
     }
 }
 
@@ -297,27 +308,41 @@ void DeFeedbackEditor::showAbout()
 {
     juce::AlertWindow::showMessageBoxAsync (
         juce::MessageBoxIconType::WarningIcon,
-        "MyEvent Labs De-Feedback v0.0.1 ALPHA",
+        "MyEvent Labs De-Feedback v" DEFEEDBACK_VERSION " ALPHA",
         "Experimental adaptive feedback-control plugin.\n\n"
         "ALPHA SOFTWARE: Test under controlled conditions before any live event. "
         "This release is not validated for show-critical use and does not replace "
         "correct loudspeaker placement, gain structure, system tuning or a competent "
         "live-sound engineer.\n\n"
         "This build is a deterministic signal processor. It is not AI-powered and makes "
-        "no guaranteed gain-before-feedback improvement claim. v0.0.1 introduces no "
+        "no guaranteed gain-before-feedback improvement claim. v" DEFEEDBACK_VERSION " introduces no "
         "intentional lookahead.\n\n"
-        "Free software, distributed under GPLv3 (see THIRD_PARTY_NOTICES.md).");
+        "Free software, distributed under GPLv3 (see THIRD_PARTY_NOTICES.md).\n\n"
+        DEFEEDBACK_HOMEPAGE);
 }
 
-void DeFeedbackEditor::showPresetMenu()
+void DeFeedbackEditor::showMenu()
 {
     juce::PopupMenu menu;
     menu.addItem (1, "Save Preset...");
     menu.addItem (2, "Load Preset...");
     menu.addSeparator();
     menu.addItem (3, "Reset to Defaults");
+    menu.addSeparator();
 
-    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (presetButton_),
+    juce::PopupMenu skins;
+    int skinId = 10;
+    for (auto* name : { "Scope", "Console", "Instrument" })
+    {
+        skins.addItem (skinId, name, true, (int) Palette::skin() == skinId - 10);
+        ++skinId;
+    }
+    menu.addSubMenu ("Skin", skins);
+
+    menu.addSeparator();
+    menu.addItem (4, "About De-Feedback");
+
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (menuButton_),
                         [this] (int result)
                         {
                             if (result == 1) savePreset();
@@ -325,6 +350,12 @@ void DeFeedbackEditor::showPresetMenu()
                             else if (result == 3)
                                 for (auto* p : proc_.getParameters())
                                     p->setValueNotifyingHost (p->getDefaultValue());
+                            else if (result == 4) showAbout();
+                            else if (result >= 10)
+                            {
+                                Palette::setSkin ((Skin) (result - 10), true);
+                                applySkin();
+                            }
                         });
 }
 

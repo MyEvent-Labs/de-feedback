@@ -5,13 +5,10 @@
 
 #include "ui/LookAndFeel.h"
 #include "ui/Meter.h"
-#include "ui/NotchDisplay.h"
-#include "ui/SectionPanel.h"
 #include "ui/SegmentedControl.h"
 #include "ui/SpectrumView.h"
 
 #include <memory>
-#include <vector>
 
 namespace defeedback
 {
@@ -26,41 +23,35 @@ public:
     ~DeFeedbackEditor() override;
 
     void paint (juce::Graphics&) override;
+    void paintOverChildren (juce::Graphics&) override;
     void resized() override;
 
 private:
+    using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
+    using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
+
     void timerCallback() override;
-    void rebuildAdvanced();
+    void setAdvancedVisible (bool shouldShow);
+    void applySkin();
     void showAbout();
-    void showPresetMenu();
+    void showMenu();
     void savePreset();
     void loadPreset();
-    void configureKnob (juce::Component& parent, juce::Slider& slider, juce::Label& label, const juce::String& name,
-                        std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>& attachmentPtr,
-                        const juce::String& paramId);
+    void configureKnob (juce::Slider& slider, juce::Label& label, const juce::String& name,
+                        std::unique_ptr<SliderAttachment>& attachmentPtr, const juce::String& paramId);
 
     DeFeedbackProcessor& proc_;
     DeFeedbackLookAndFeel lnf_;
 
-    // Hero + read-outs.
+    // Hero + meters.
     SpectrumView spectrum_;
     Meter meter_;
-    NotchDisplay notchDisplay_;
 
-    SectionPanel spectrumPanel_ { "SPECTRUM" };
-    SectionPanel levelsPanel_ { "LEVELS" };
-    SectionPanel notchesPanel_ { "ACTIVE NOTCHES" };
-    SectionPanel protectionPanel_ { "PROTECTION" };
-    SectionPanel outputPanel_ { "OUTPUT" };
-    SectionPanel actionsPanel_ { "ACTIONS" };
-    SectionPanel advancedPanel_ { "ADVANCED" };
-
+    juce::TextButton menuButton_ { "MENU" };
     juce::TextButton bypassButton_ { "BYPASS" };
     juce::TextButton freezeButton_ { "FREEZE" };
-    juce::TextButton clearButton_ { "CLEAR ALL" };
+    juce::TextButton clearButton_ { "CLEAR" };
     juce::TextButton advancedButton_ { "ADVANCED" };
-    juce::TextButton presetButton_ { "PRESET" };
-    juce::TextButton aboutButton_ { "ABOUT" };
 
     SegmentedControl modeControl_ { juce::StringArray { "CONSERVATIVE", "NORMAL", "AGGRESSIVE" } };
 
@@ -71,13 +62,17 @@ private:
     juce::Label inputTrimLabel_, outputTrimLabel_, minFreqLabel_, maxFreqLabel_, maxNotchesLabel_, qBiasLabel_;
     juce::ToggleButton stereoLinkButton_ { "Linked stereo" };
 
-    juce::Label statusLabel_;
+    // Footer.
+    juce::HyperlinkButton creditLink_;
+    juce::Label versionLabel_, statusLabel_;
+
+    juce::Rectangle<int> dockBounds_, advancedBounds_, brandBounds_, chipBounds_;
     bool advancedVisible_ = false;
 
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> bypassAttach_, freezeAttach_, stereoLinkAttach_;
+    std::unique_ptr<ButtonAttachment> bypassAttach_, freezeAttach_, stereoLinkAttach_;
     std::unique_ptr<juce::ParameterAttachment> modeAttachment_;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> strengthAttach_, sensitivityAttach_, maxCutAttach_, recoveryAttach_;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> inputTrimAttach_, outputTrimAttach_, minFreqAttach_, maxFreqAttach_, maxNotchesAttach_, qBiasAttach_;
+    std::unique_ptr<SliderAttachment> strengthAttach_, sensitivityAttach_, maxCutAttach_, recoveryAttach_;
+    std::unique_ptr<SliderAttachment> inputTrimAttach_, outputTrimAttach_, minFreqAttach_, maxFreqAttach_, maxNotchesAttach_, qBiasAttach_;
 
     std::unique_ptr<juce::FileChooser> fileChooser_;
 

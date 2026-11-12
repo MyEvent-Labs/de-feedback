@@ -31,6 +31,16 @@ recorded as a release blocker in `docs/ALPHA_LIMITATIONS.md`.
 - macOS AUv2 support is provided through the Apple AU SDK headers used by JUCE.
   Use is subject to Apple's SDK terms.
 
+## Fonts
+
+Embedded in the plugin binary; font files and full licence texts are in
+`assets/fonts/`.
+
+- Barlow Semi Condensed (Medium, SemiBold). Copyright 2017 The Barlow Project
+  Authors (https://github.com/jpt/barlow). SIL Open Font License 1.1.
+- JetBrains Mono (Medium). Copyright 2020 The JetBrains Mono Project Authors
+  (https://github.com/JetBrains/JetBrainsMono). SIL Open Font License 1.1.
+
 ## No third-party DSP libraries
 
 All DSP in this repository is original. No third-party DSP, ML or spectral

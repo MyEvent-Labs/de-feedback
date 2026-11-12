@@ -26,6 +26,22 @@ All notable changes to De-Feedback are documented here. This project adheres to
   control and unit-labelled readouts.
 - Native Windows and macOS CI workflows.
 
+### Changed
+- Interface redesigned ("Scope" skin): full-window analyser with a glowing
+  trace, a live cut curve with per-notch tags (replacing the separate
+  active-notch list), a large gain-reduction read-out, vertical in/out/GR
+  meters, and a floating control dock with values shown inside the knobs.
+- Two more skins on the same layout, Console and Instrument, selectable under
+  MENU > Skin and remembered per user on each computer.
+- Preset and About moved under a single MENU button; linked stereo moved into
+  the Advanced drawer.
+- The Windows installer script now packages the optimised `build-release`
+  output by default instead of the unoptimised configure build.
+- Footer now shows a "Developed by MyEvent Labs" link and the version number,
+  both taken from the CMake project definition.
+- Fonts are embedded (Barlow Semi Condensed, JetBrains Mono) so the interface
+  looks the same on every machine.
+
 ### Known limitations
 See [`docs/ALPHA_LIMITATIONS.md`](docs/ALPHA_LIMITATIONS.md).
 
