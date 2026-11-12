@@ -50,7 +50,15 @@ target_compile_definitions(defeedback_core
         JUCE_VST3_CAN_REPLACE_VST2=0
         JUCE_MODAL_LOOPS_PERMITTED=1
         JUCE_DISPLAY_SPLASH_SCREEN=0
-        JUCE_REPORT_APP_USAGE=0)
+        JUCE_REPORT_APP_USAGE=0
+        DEFEEDBACK_VERSION="${PROJECT_VERSION}"
+        DEFEEDBACK_HOMEPAGE="${PROJECT_HOMEPAGE_URL}")
+
+# Embedded UI fonts (SIL OFL 1.1, see assets/fonts and THIRD_PARTY_NOTICES.md).
+juce_add_binary_data(defeedback_assets SOURCES
+    assets/fonts/BarlowSemiCondensed-Medium.ttf
+    assets/fonts/BarlowSemiCondensed-SemiBold.ttf
+    assets/fonts/JetBrainsMono-Medium.ttf)
 
 # ---------------------------------------------------------------------------
 # Plugin targets
@@ -79,14 +87,14 @@ target_sources(DeFeedback PRIVATE
     src/PluginEditor.cpp
     src/ui/LookAndFeel.cpp
     src/ui/SpectrumView.cpp
-    src/ui/Meter.cpp
-    src/ui/NotchDisplay.cpp)
+    src/ui/Meter.cpp)
 
 target_include_directories(DeFeedback PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 target_link_libraries(DeFeedback
     PRIVATE
         defeedback_core
+        defeedback_assets
         juce::juce_audio_utils
         juce::juce_gui_extra
     PUBLIC

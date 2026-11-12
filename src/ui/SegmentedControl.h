@@ -2,12 +2,14 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include "ui/LookAndFeel.h"
+
 #include <functional>
 
 namespace defeedback
 {
 
-/** A clean segmented selector, used for the protection mode. */
+/** A vertically stacked selector, used for the protection mode. */
 class SegmentedControl : public juce::Component
 {
 public:
@@ -31,49 +33,39 @@ public:
 
     void paint (juce::Graphics& g) override
     {
-        const auto b = getLocalBounds().toFloat().reduced (0.5f);
-        g.setColour (juce::Colour (0xff1a1f2b));
-        g.fillRoundedRectangle (b, 6.0f);
-        g.setColour (juce::Colour (0xff242b3a));
-        g.drawRoundedRectangle (b, 6.0f, 1.0f);
-
         if (items_.isEmpty())
             return;
 
-        const auto n = items_.size();
-        const auto w = b.getWidth() / (float) n;
+        const auto b = getLocalBounds().toFloat();
+        const auto rowH = b.getHeight() / (float) items_.size();
 
-        for (int i = 0; i < n; ++i)
+        g.setFont (DeFeedbackLookAndFeel::caps (11.5f));
+
+        for (int i = 0; i < items_.size(); ++i)
         {
-            auto seg = b.withWidth (w).withX (b.getX() + w * (float) i).reduced (3.0f, 3.0f);
+            const auto row = b.withHeight (rowH).withY (b.getY() + rowH * (float) i).reduced (0.0f, 2.0f);
 
             if (i == selected_)
             {
-                g.setColour (juce::Colour (0xff35e0c3));
-                g.fillRoundedRectangle (seg, 4.0f);
+                g.setColour (Palette::accent);
+                g.fillRoundedRectangle (row, 7.0f);
             }
             else if (i == hover_)
             {
-                g.setColour (juce::Colour (0xff242b3a));
-                g.fillRoundedRectangle (seg, 4.0f);
+                g.setColour (Palette::surfaceHi);
+                g.fillRoundedRectangle (row, 7.0f);
             }
 
-            g.setColour (i == selected_ ? juce::Colour (0xff0a0c11) : juce::Colour (0xff8993a8));
-            g.setFont (juce::Font (juce::FontOptions (10.5f, juce::Font::bold)));
-            g.drawText (items_[i], seg.toNearestInt(), juce::Justification::centred, false);
+            g.setColour (i == selected_ ? Palette::background : (i == hover_ ? Palette::text : Palette::textDim));
+            g.drawText (items_[i], row.toNearestInt(), juce::Justification::centred, false);
         }
     }
 
-    void mouseDown (const juce::MouseEvent& e) override
-    {
-        const int idx = segmentAt (e.getPosition());
-        if (idx >= 0)
-            setSelectedIndex (idx);
-    }
+    void mouseDown (const juce::MouseEvent& e) override { setSelectedIndex (rowAt (e.getPosition())); }
 
     void mouseMove (const juce::MouseEvent& e) override
     {
-        const int idx = segmentAt (e.getPosition());
+        const int idx = rowAt (e.getPosition());
         if (idx != hover_)
         {
             hover_ = idx;
@@ -88,14 +80,10 @@ public:
     }
 
 private:
-    int segmentAt (juce::Point<int> p) const
+    int rowAt (juce::Point<int> p) const
     {
-        if (items_.isEmpty())
-            return -1;
-
-        const auto w = getWidth() / (float) items_.size();
-        const int idx = juce::jlimit (0, items_.size() - 1, (int) ((float) p.x / juce::jmax (1.0f, w)));
-        return idx;
+        const auto rowH = (float) getHeight() / (float) juce::jmax (1, items_.size());
+        return juce::jlimit (0, juce::jmax (0, items_.size() - 1), (int) ((float) p.y / juce::jmax (1.0f, rowH)));
     }
 
     juce::StringArray items_;

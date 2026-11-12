@@ -38,6 +38,9 @@ cmake-build-*/
 Thumbs.db
 desktop.ini
 
+# Design mockup scratch
+/.superpowers/
+
 # Local overrides
 .env
 .env.local
