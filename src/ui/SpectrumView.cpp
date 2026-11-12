@@ -26,7 +26,7 @@ void SpectrumView::paint (juce::Graphics& g)
 {
     const auto bounds = getLocalBounds().toFloat();
 
-    g.setColour (Palette::panelDark);
+    g.setColour (Palette::background);
     g.fillRoundedRectangle (bounds, 5.0f);
 
     const auto plot = bounds.reduced (6.0f, 8.0f);
@@ -127,12 +127,18 @@ void SpectrumView::paint (juce::Graphics& g)
         g.fillRect (plot.getX(), plot.getY(), w * juce::jlimit (0.0f, 1.0f, risk), 3.0f);
     }
 
-    // Protection status: makes it obvious when the unit is actually acting.
-    g.setFont (juce::Font (juce::FontOptions (11.0f, juce::Font::bold)));
-    g.setColour (active > 0 ? Palette::warning : Palette::accent);
-    g.drawText (active > 0 ? ("PROTECTING  " + juce::String (active)) : "CLEAN",
-                getLocalBounds().reduced (10, 6).removeFromTop (14),
-                juce::Justification::centredRight, false);
+    // Protection status pill.
+    {
+        const juce::String label = active > 0 ? ("PROTECTING " + juce::String (active)) : "CLEAN";
+        const auto colour = active > 0 ? Palette::warning : Palette::accent;
+        g.setFont (DeFeedbackLookAndFeel::typeface (10.5f, true));
+        const int w = juce::jmax (66, 20 + (int) juce::GlyphArrangement::getStringWidth (g.getCurrentFont(), label));
+        juce::Rectangle<int> pill (getWidth() - w - 12, 12, w, 19);
+        g.setColour (colour.withAlpha (0.15f));
+        g.fillRoundedRectangle (pill.toFloat(), 4.0f);
+        g.setColour (colour);
+        g.drawText (label, pill, juce::Justification::centred, false);
+    }
 }
 
 } // namespace defeedback

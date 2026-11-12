@@ -3,16 +3,10 @@
 #include "PluginProcessor.h"
 #include "state/StateIO.h"
 
+#include <cmath>
+
 namespace defeedback
 {
-
-namespace
-{
-    juce::Font editorFont (float height, bool bold = false)
-    {
-        return juce::Font (juce::FontOptions (height, bold ? juce::Font::bold : juce::Font::plain));
-    }
-}
 
 DeFeedbackEditor::DeFeedbackEditor (DeFeedbackProcessor& processor)
     : juce::AudioProcessorEditor (&processor),
@@ -23,23 +17,61 @@ DeFeedbackEditor::DeFeedbackEditor (DeFeedbackProcessor& processor)
 {
     setLookAndFeel (&lnf_);
     setResizable (true, true);
-    setResizeLimits (640, 560, 1500, 1000);
-    setSize (780, 660);
+    setResizeLimits (900, 600, 1600, 1000);
+    setSize (1080, 700);
 
-    juce::ignoreUnused (minFreqLabel_, maxFreqLabel_, maxNotchesLabel_, qBiasLabel_, inputTrimLabel_, outputTrimLabel_);
+    // Panels.
+    for (auto* p : { &spectrumPanel_, &levelsPanel_, &notchesPanel_, &protectionPanel_,
+                     &outputPanel_, &actionsPanel_, &advancedPanel_ })
+        addAndMakeVisible (*p);
 
-    addAndMakeVisible (spectrum_);
-    addAndMakeVisible (meter_);
-    addAndMakeVisible (notchDisplay_);
+    spectrumPanel_.addAndMakeVisible (spectrum_);
+    levelsPanel_.addAndMakeVisible (meter_);
+    notchesPanel_.addAndMakeVisible (notchDisplay_);
 
-    // Header.
-    bypassAttach_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (
-        proc_.apvts, parameters::bypass, bypassButton_);
+    // Header actions.
+    bypassAttach_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (proc_.apvts, parameters::bypass, bypassButton_);
     bypassButton_.setClickingTogglesState (true);
     addAndMakeVisible (bypassButton_);
 
-    freezeAttach_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (
-        proc_.apvts, parameters::freeze, freezeButton_);
+    presetButton_.onClick = [this] { showPresetMenu(); };
+    addAndMakeVisible (presetButton_);
+
+    aboutButton_.onClick = [this] { showAbout(); };
+    addAndMakeVisible (aboutButton_);
+
+    // Protection mode.
+    addAndMakeVisible (modeControl_);
+    if (auto* modeParam = proc_.apvts.getParameter (parameters::mode))
+    {
+        modeAttachment_ = std::make_unique<juce::ParameterAttachment> (*modeParam,
+            [this] (float v) { modeControl_.setSelectedIndex ((int) std::lround (v), juce::dontSendNotification); });
+        modeAttachment_->sendInitialUpdate();
+        modeControl_.onChange = [this] (int idx) { modeAttachment_->setValueAsCompleteGesture ((float) idx); };
+    }
+
+    // Protection knobs.
+    configureKnob (strengthSlider_, strengthLabel_, "STRENGTH", strengthAttach_, parameters::strength);
+    configureKnob (sensitivitySlider_, sensitivityLabel_, "SENSITIVITY", sensitivityAttach_, parameters::sensitivity);
+    configureKnob (maxCutSlider_, maxCutLabel_, "MAX CUT", maxCutAttach_, parameters::maxCutDb);
+    configureKnob (recoverySlider_, recoveryLabel_, "RECOVERY", recoveryAttach_, parameters::recoverySeconds);
+
+    // Output knobs.
+    configureKnob (inputTrimSlider_, inputTrimLabel_, "IN TRIM", inputTrimAttach_, parameters::inputTrimDb);
+    configureKnob (outputTrimSlider_, outputTrimLabel_, "OUT TRIM", outputTrimAttach_, parameters::outputTrimDb);
+
+    stereoLinkAttach_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (proc_.apvts, parameters::stereoLink, stereoLinkButton_);
+    stereoLinkButton_.setClickingTogglesState (true);
+    addAndMakeVisible (stereoLinkButton_);
+
+    // Advanced knobs.
+    configureKnob (minFreqSlider_, minFreqLabel_, "MIN FREQ", minFreqAttach_, parameters::minFrequencyHz);
+    configureKnob (maxFreqSlider_, maxFreqLabel_, "MAX FREQ", maxFreqAttach_, parameters::maxFrequencyHz);
+    configureKnob (maxNotchesSlider_, maxNotchesLabel_, "NOTCHES", maxNotchesAttach_, parameters::maxNotches);
+    configureKnob (qBiasSlider_, qBiasLabel_, "Q BIAS", qBiasAttach_, parameters::qBias);
+
+    // Actions.
+    freezeAttach_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (proc_.apvts, parameters::freeze, freezeButton_);
     freezeButton_.setClickingTogglesState (true);
     addAndMakeVisible (freezeButton_);
 
@@ -50,48 +82,13 @@ DeFeedbackEditor::DeFeedbackEditor (DeFeedbackProcessor& processor)
     advancedButton_.onClick = [this] { advancedVisible_ = advancedButton_.getToggleState(); rebuildAdvanced(); resized(); };
     addAndMakeVisible (advancedButton_);
 
-    presetButton_.onClick = [this] { showPresetMenu(); };
-    addAndMakeVisible (presetButton_);
-
-    aboutButton_.onClick = [this] { showAbout(); };
-    addAndMakeVisible (aboutButton_);
-
-    // Mode.
-    modeAttach_ = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (
-        proc_.apvts, parameters::mode, modeBox_);
-    modeBox_.addItemList ({ "Conservative", "Normal", "Aggressive" }, 1);
-    addAndMakeVisible (modeBox_);
-    modeLabel_.setText ("PROTECTION", juce::dontSendNotification);
-    modeLabel_.setJustificationType (juce::Justification::centred);
-    modeLabel_.setFont (editorFont (10.0f));
-    addAndMakeVisible (modeLabel_);
-
-    // Knobs.
-    configureKnob (strengthSlider_, strengthLabel_, "STRENGTH", strengthAttach_, parameters::strength);
-    configureKnob (sensitivitySlider_, sensitivityLabel_, "SENSITIVITY", sensitivityAttach_, parameters::sensitivity);
-    configureKnob (maxCutSlider_, maxCutLabel_, "MAX CUT", maxCutAttach_, parameters::maxCutDb);
-    configureKnob (recoverySlider_, recoveryLabel_, "RECOVERY", recoveryAttach_, parameters::recoverySeconds);
-
-    // Advanced controls.
-    configureKnob (minFreqSlider_, minFreqLabel_, "MIN FREQ", minFreqAttach_, parameters::minFrequencyHz);
-    configureKnob (maxFreqSlider_, maxFreqLabel_, "MAX FREQ", maxFreqAttach_, parameters::maxFrequencyHz);
-    configureKnob (maxNotchesSlider_, maxNotchesLabel_, "NOTCHES", maxNotchesAttach_, parameters::maxNotches);
-    configureKnob (qBiasSlider_, qBiasLabel_, "Q BIAS", qBiasAttach_, parameters::qBias);
-    configureKnob (inputTrimSlider_, inputTrimLabel_, "IN TRIM", inputTrimAttach_, parameters::inputTrimDb);
-    configureKnob (outputTrimSlider_, outputTrimLabel_, "OUT TRIM", outputTrimAttach_, parameters::outputTrimDb);
-
-    stereoLinkAttach_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (
-        proc_.apvts, parameters::stereoLink, stereoLinkButton_);
-    stereoLinkButton_.setClickingTogglesState (true);
-    addAndMakeVisible (stereoLinkButton_);
-
-    statusLabel_.setFont (editorFont (11.0f));
+    statusLabel_.setFont (DeFeedbackLookAndFeel::typeface (11.0f));
     statusLabel_.setColour (juce::Label::textColourId, Palette::textDim);
     statusLabel_.setJustificationType (juce::Justification::centredRight);
     addAndMakeVisible (statusLabel_);
 
     rebuildAdvanced();
-    startTimerHz (8);
+    startTimerHz (12);
 }
 
 DeFeedbackEditor::~DeFeedbackEditor()
@@ -105,14 +102,14 @@ void DeFeedbackEditor::configureKnob (juce::Slider& slider, juce::Label& label, 
                                       const juce::String& paramId)
 {
     slider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
-    slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 66, 16);
+    slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 74, 15);
     slider.setColour (juce::Slider::textBoxTextColourId, Palette::text);
     slider.setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
     addAndMakeVisible (slider);
 
     label.setText (name, juce::dontSendNotification);
     label.setJustificationType (juce::Justification::centred);
-    label.setFont (editorFont (10.0f));
+    label.setFont (DeFeedbackLookAndFeel::typeface (10.0f, true));
     label.setColour (juce::Label::textColourId, Palette::textDim);
     addAndMakeVisible (label);
 
@@ -121,14 +118,13 @@ void DeFeedbackEditor::configureKnob (juce::Slider& slider, juce::Label& label, 
 
 void DeFeedbackEditor::rebuildAdvanced()
 {
-    const bool show = advancedVisible_;
+    advancedPanel_.setVisible (advancedVisible_);
 
-    for (auto* c : { (juce::Component*) &minFreqSlider_, (juce::Component*) &maxFreqSlider_, (juce::Component*) &maxNotchesSlider_,
-                     (juce::Component*) &qBiasSlider_,
-                     (juce::Component*) &minFreqLabel_, (juce::Component*) &maxFreqLabel_, (juce::Component*) &maxNotchesLabel_,
-                     (juce::Component*) &qBiasLabel_,
-                     (juce::Component*) &stereoLinkButton_ })
-        c->setVisible (show);
+    for (auto* c : { (juce::Component*) &minFreqSlider_, (juce::Component*) &maxFreqSlider_,
+                     (juce::Component*) &maxNotchesSlider_, (juce::Component*) &qBiasSlider_,
+                     (juce::Component*) &minFreqLabel_, (juce::Component*) &maxFreqLabel_,
+                     (juce::Component*) &maxNotchesLabel_, (juce::Component*) &qBiasLabel_ })
+        c->setVisible (advancedVisible_);
 }
 
 void DeFeedbackEditor::timerCallback()
@@ -136,14 +132,14 @@ void DeFeedbackEditor::timerCallback()
     const auto& snap = proc_.getUiSnapshot();
 
     juce::String status;
-    status << juce::String (juce::roundToInt (proc_.getSampleRate() / 1000.0)) << " kHz"
-           << "  |  " << proc_.getBlockSize() << " samp"
-           << "  |  lat " << proc_.getLatencySamples()
-           << "  |  notches " << snap.activeNotches.load()
-           << "  |  load " << juce::String (snap.dspLoad.load() * 100.0f, 1) << "%";
+    status << juce::String (juce::roundToInt (proc_.getSampleRate() / 1000.0)) << " kHz   "
+           << proc_.getBlockSize() << " smp   "
+           << "lat " << proc_.getLatencySamples() << "   "
+           << "notches " << snap.activeNotches.load() << "   "
+           << "load " << juce::String (snap.dspLoad.load() * 100.0f, 1) << "%";
 
     if (snap.overloads.load() > 0)
-        status << "  |  OVERLOAD";
+        status << "   OVERLOAD";
 
     statusLabel_.setText (status, juce::dontSendNotification);
 }
@@ -152,112 +148,140 @@ void DeFeedbackEditor::paint (juce::Graphics& g)
 {
     g.fillAll (Palette::background);
 
-    auto header = getLocalBounds().removeFromTop (46).toFloat();
-
-    g.setColour (Palette::panel);
+    // Header band.
+    auto header = getLocalBounds().removeFromTop (56);
+    g.setColour (Palette::surface);
     g.fillRect (header);
+    g.setColour (Palette::outline);
+    g.drawHorizontalLine (header.getBottom() - 1, 0.0f, (float) getWidth());
 
     g.setColour (Palette::accent);
-    g.setFont (editorFont (15.0f, true));
-    g.drawText ("MyEvent Labs", header.reduced (14.0f, 0.0f).withWidth (140.0f), juce::Justification::centredLeft, false);
+    g.setFont (DeFeedbackLookAndFeel::typeface (15.0f, true));
+    g.drawText ("MyEvent Labs", header.reduced (16, 0).withWidth (150).withTrimmedTop (-1),
+                juce::Justification::centredLeft, false);
 
     g.setColour (Palette::text);
-    g.setFont (editorFont (15.0f, true));
-    g.drawText ("De-Feedback", header.withTrimmedLeft (150.0f).withWidth (150.0f), juce::Justification::centredLeft, false);
+    g.setFont (DeFeedbackLookAndFeel::typeface (15.0f, true));
+    g.drawText ("De-Feedback", header.withTrimmedLeft (168).withWidth (150),
+                juce::Justification::centredLeft, false);
 
+    // ALPHA chip.
+    const juce::Rectangle<int> chip (330, 19, 62, 18);
+    g.setColour (Palette::warning.withAlpha (0.16f));
+    g.fillRoundedRectangle (chip.toFloat(), 4.0f);
     g.setColour (Palette::warning);
-    g.setFont (editorFont (10.0f, true));
-    g.drawText ("v0.0.1 ALPHA", header.withTrimmedLeft (300.0f).withWidth (110.0f), juce::Justification::centredLeft, false);
+    g.setFont (DeFeedbackLookAndFeel::typeface (10.0f, true));
+    g.drawText ("ALPHA", chip, juce::Justification::centred, false);
 
-    // Footer line.
+    // Footer separator.
     g.setColour (Palette::outline);
-    g.drawHorizontalLine (getHeight() - 40, 0.0f, (float) getWidth());
+    g.drawHorizontalLine (getHeight() - 27, 0.0f, (float) getWidth());
 }
 
 void DeFeedbackEditor::resized()
 {
     auto area = getLocalBounds();
 
-    auto header = area.removeFromTop (46);
-    header.removeFromLeft (430);
-    aboutButton_.setBounds (header.removeFromLeft (62).reduced (3, 10));
-    presetButton_.setBounds (header.removeFromLeft (78).reduced (3, 10));
-    bypassButton_.setBounds (header.removeFromRight (84).reduced (3, 10));
+    auto header = area.removeFromTop (56);
+    header.removeFromRight (14);
+    bypassButton_.setBounds (header.removeFromRight (96).reduced (0, 14));
+    header.removeFromRight (8);
+    presetButton_.setBounds (header.removeFromRight (84).reduced (0, 14));
+    header.removeFromRight (8);
+    aboutButton_.setBounds (header.removeFromRight (68).reduced (0, 14));
 
-    auto footer = area.removeFromBottom (40);
-    statusLabel_.setBounds (footer.removeFromRight (footer.getWidth() - 220).reduced (10, 6));
-    meter_.setBounds (footer.reduced (8, 5));
+    auto footer = area.removeFromBottom (28);
+    statusLabel_.setBounds (footer.reduced (16, 0));
 
-    auto content = area.reduced (8);
+    auto body = area.reduced (16, 14);
 
-    const int controlsH = 126;
     const int advH = advancedVisible_ ? 122 : 0;
-    const int meterH = 124;
-    const int gaps = advancedVisible_ ? 18 : 12;
-    const int specH = juce::jmax (150, content.getHeight() - controlsH - advH - meterH - gaps);
+    const int deckH = 156;
 
-    spectrum_.setBounds (content.removeFromTop (specH));
-    content.removeFromTop (6);
+    if (advancedVisible_)
+        advancedPanel_.setBounds (body.removeFromBottom (advH).withTrimmedBottom (0));
 
-    auto meterRow = content.removeFromTop (meterH);
-    meter_.setBounds (meterRow.removeFromLeft (246));
-    meterRow.removeFromLeft (6);
-    notchDisplay_.setBounds (meterRow);
+    auto deck = body.removeFromBottom (deckH);
+    body.removeFromBottom (12);
 
-    content.removeFromTop (6);
-    auto controls = content.removeFromTop (controlsH);
+    // Top row: spectrum (hero) + read-out sidebar.
+    auto sidebar = body.removeFromRight (300);
+    body.removeFromRight (12);
 
-    auto modeArea = controls.removeFromLeft (110);
-    modeLabel_.setBounds (modeArea.removeFromTop (16));
-    modeBox_.setBounds (modeArea.removeFromTop (30));
+    spectrumPanel_.setBounds (body);
+    spectrum_.setBounds (spectrumPanel_.getContentBounds());
 
-    auto buttonArea = controls.removeFromRight (110);
-    freezeButton_.setBounds (buttonArea.removeFromTop (36).reduced (0, 3));
-    clearButton_.setBounds (buttonArea.removeFromTop (36).reduced (0, 3));
-    advancedButton_.setBounds (buttonArea.removeFromTop (36).reduced (0, 3));
+    levelsPanel_.setBounds (sidebar.removeFromTop (juce::roundToInt ((float) sidebar.getHeight() * 0.56f)));
+    sidebar.removeFromTop (12);
+    notchesPanel_.setBounds (sidebar);
+    meter_.setBounds (levelsPanel_.getContentBounds());
+    notchDisplay_.setBounds (notchesPanel_.getContentBounds());
 
-    auto knobRow = controls.reduced (10, 0);
-    const int knobW = juce::jmax (56, knobRow.getWidth() / 6);
+    // Control deck.
+    const int outW = 226, actW = 176;
+    protectionPanel_.setBounds (deck.removeFromLeft (deck.getWidth() - outW - actW - 24));
+    deck.removeFromLeft (12);
+    outputPanel_.setBounds (deck.removeFromLeft (outW));
+    deck.removeFromLeft (12);
+    actionsPanel_.setBounds (deck);
 
-    auto placeKnob = [&] (juce::Slider& slider, juce::Label& label)
     {
-        auto col = knobRow.removeFromLeft (knobW);
-        label.setBounds (col.removeFromTop (14));
-        slider.setBounds (col);
-    };
+        auto pc = protectionPanel_.getContentBounds();
+        modeControl_.setBounds (pc.removeFromTop (26).withWidth (juce::jmin (348, pc.getWidth())));
+        pc.removeFromTop (10);
+        auto row = pc;
+        const int kw = juce::jmax (54, row.getWidth() / 4);
+        auto place = [&] (juce::Slider& s, juce::Label& l)
+        {
+            auto col = row.removeFromLeft (kw);
+            l.setBounds (col.removeFromTop (14));
+            s.setBounds (col);
+        };
+        place (strengthSlider_, strengthLabel_);
+        place (sensitivitySlider_, sensitivityLabel_);
+        place (maxCutSlider_, maxCutLabel_);
+        place (recoverySlider_, recoveryLabel_);
+    }
 
-    // Front panel carries the always-audible trims alongside the suppressor
-    // controls, so turning a knob always has an audible effect.
-    placeKnob (strengthSlider_, strengthLabel_);
-    placeKnob (sensitivitySlider_, sensitivityLabel_);
-    placeKnob (maxCutSlider_, maxCutLabel_);
-    placeKnob (recoverySlider_, recoveryLabel_);
-    placeKnob (inputTrimSlider_, inputTrimLabel_);
-    placeKnob (outputTrimSlider_, outputTrimLabel_);
+    {
+        auto oc = outputPanel_.getContentBounds();
+        stereoLinkButton_.setBounds (oc.removeFromBottom (20));
+        oc.removeFromBottom (4);
+        auto row = oc;
+        const int ow = juce::jmax (54, row.getWidth() / 2);
+        auto place = [&] (juce::Slider& s, juce::Label& l)
+        {
+            auto col = row.removeFromLeft (ow);
+            l.setBounds (col.removeFromTop (14));
+            s.setBounds (col);
+        };
+        place (inputTrimSlider_, inputTrimLabel_);
+        place (outputTrimSlider_, outputTrimLabel_);
+    }
+
+    {
+        auto ac = actionsPanel_.getContentBounds();
+        freezeButton_.setBounds (ac.removeFromTop (32));
+        ac.removeFromTop (8);
+        clearButton_.setBounds (ac.removeFromTop (32));
+        ac.removeFromTop (8);
+        advancedButton_.setBounds (ac.removeFromTop (32));
+    }
 
     if (advancedVisible_)
     {
-        content.removeFromTop (6);
-        auto adv = content.removeFromTop (116);
-
-        auto row = adv;
-        auto left = row.removeFromLeft (row.getWidth() / 2);
-        auto right = row;
-
-        auto placeAdv = [] (juce::Rectangle<int>& r, juce::Slider& slider, juce::Label& label, int w)
+        auto ac = advancedPanel_.getContentBounds();
+        const int aw = juce::jmax (54, ac.getWidth() / 4);
+        auto place = [&] (juce::Slider& s, juce::Label& l)
         {
-            auto col = r.removeFromLeft (w);
-            label.setBounds (col.removeFromTop (14));
-            slider.setBounds (col.reduced (2));
+            auto col = ac.removeFromLeft (aw);
+            l.setBounds (col.removeFromTop (14));
+            s.setBounds (col);
         };
-
-        placeAdv (left, minFreqSlider_, minFreqLabel_, left.getWidth() / 3);
-        placeAdv (left, maxFreqSlider_, maxFreqLabel_, left.getWidth() / 2);
-        placeAdv (left, maxNotchesSlider_, maxNotchesLabel_, left.getWidth());
-
-        placeAdv (right, qBiasSlider_, qBiasLabel_, right.getWidth() / 2);
-
-        stereoLinkButton_.setBounds (adv.getX() + 4, adv.getBottom() - 10, 140, 20);
+        place (minFreqSlider_, minFreqLabel_);
+        place (maxFreqSlider_, maxFreqLabel_);
+        place (maxNotchesSlider_, maxNotchesLabel_);
+        place (qBiasSlider_, qBiasLabel_);
     }
 }
 
@@ -291,10 +315,8 @@ void DeFeedbackEditor::showPresetMenu()
                             if (result == 1) savePreset();
                             else if (result == 2) loadPreset();
                             else if (result == 3)
-                            {
                                 for (auto* p : proc_.getParameters())
                                     p->setValueNotifyingHost (p->getDefaultValue());
-                            }
                         });
 }
 
@@ -310,7 +332,6 @@ void DeFeedbackEditor::savePreset()
                                    const auto file = fc.getResult();
                                    if (file == juce::File())
                                        return;
-
                                    const auto xml = stateToXml (proc_.apvts.copyState());
                                    if (xml.isNotEmpty())
                                        file.withFileExtension ("defeedback.xml").replaceWithText (xml);
@@ -329,7 +350,6 @@ void DeFeedbackEditor::loadPreset()
                                    const auto file = fc.getResult();
                                    if (! file.existsAsFile())
                                        return;
-
                                    juce::Result result = juce::Result::fail ("not parsed");
                                    auto tree = stateFromXml (file.loadFileAsString(), result);
                                    if (result.wasOk() && tree.isValid())
