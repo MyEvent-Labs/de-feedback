@@ -35,7 +35,7 @@ private:
     void showPresetMenu();
     void savePreset();
     void loadPreset();
-    void configureKnob (juce::Slider& slider, juce::Label& label, const juce::String& name,
+    void configureKnob (juce::Component& parent, juce::Slider& slider, juce::Label& label, const juce::String& name,
                         std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>& attachmentPtr,
                         const juce::String& paramId);
 

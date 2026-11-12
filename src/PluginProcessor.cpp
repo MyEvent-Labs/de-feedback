@@ -69,23 +69,27 @@ juce::AudioProcessorValueTreeState::ParameterLayout DeFeedbackProcessor::createP
     params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { bypass, 1 }, "Bypass", false));
     params.push_back (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { mode, 1 }, "Protection Mode",
         juce::StringArray { "Conservative", "Normal", "Aggressive" }, 0));
+    const auto dbAttr = juce::AudioParameterFloatAttributes().withLabel ("dB");
+    const auto hzAttr = juce::AudioParameterFloatAttributes().withLabel ("Hz");
+    const auto sAttr  = juce::AudioParameterFloatAttributes().withLabel ("s");
+
     params.push_back (std::make_unique<FloatParam> (juce::ParameterID { strength, 1 }, "Strength", Range (0.25f, 2.0f, 0.01f), 1.0f));
-    params.push_back (std::make_unique<FloatParam> (juce::ParameterID { sensitivity, 1 }, "Sensitivity", Range (-6.0f, 6.0f, 0.1f), 0.0f));
-    params.push_back (std::make_unique<FloatParam> (juce::ParameterID { maxCutDb, 1 }, "Max Cut", Range (0.0f, 18.0f, 0.1f), 9.0f));
+    params.push_back (std::make_unique<FloatParam> (juce::ParameterID { sensitivity, 1 }, "Sensitivity", Range (-6.0f, 6.0f, 0.1f), 0.0f, dbAttr));
+    params.push_back (std::make_unique<FloatParam> (juce::ParameterID { maxCutDb, 1 }, "Max Cut", Range (0.0f, 18.0f, 0.1f), 9.0f, dbAttr));
     params.push_back (std::make_unique<FloatParam> (juce::ParameterID { recoverySeconds, 1 }, "Recovery",
-        Range (0.5f, 30.0f, 0.1f, 0.4f), 4.0f));
+        Range (0.5f, 30.0f, 0.1f, 0.4f), 4.0f, sAttr));
     params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { freeze, 1 }, "Freeze", false));
 
     params.push_back (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { stereoLink, 1 }, "Stereo Link", true));
     params.push_back (std::make_unique<FloatParam> (juce::ParameterID { minFrequencyHz, 1 }, "Min Frequency",
-        Range (20.0f, 2000.0f, 1.0f, 0.5f), 80.0f));
+        Range (20.0f, 2000.0f, 1.0f, 0.5f), 80.0f, hzAttr));
     params.push_back (std::make_unique<FloatParam> (juce::ParameterID { maxFrequencyHz, 1 }, "Max Frequency",
-        Range (2000.0f, 20000.0f, 1.0f, 0.4f), 18000.0f));
+        Range (2000.0f, 20000.0f, 1.0f, 0.4f), 18000.0f, hzAttr));
     params.push_back (std::make_unique<juce::AudioParameterInt> (juce::ParameterID { maxNotches, 1 }, "Max Notches", 1, 12, 12));
     params.push_back (std::make_unique<FloatParam> (juce::ParameterID { qBias, 1 }, "Q Bias", Range (0.5f, 2.0f, 0.01f), 1.0f));
 
-    params.push_back (std::make_unique<FloatParam> (juce::ParameterID { inputTrimDb, 1 }, "Input Trim", Range (-24.0f, 24.0f, 0.1f), 0.0f));
-    params.push_back (std::make_unique<FloatParam> (juce::ParameterID { outputTrimDb, 1 }, "Output Trim", Range (-24.0f, 24.0f, 0.1f), 0.0f));
+    params.push_back (std::make_unique<FloatParam> (juce::ParameterID { inputTrimDb, 1 }, "Input Trim", Range (-24.0f, 24.0f, 0.1f), 0.0f, dbAttr));
+    params.push_back (std::make_unique<FloatParam> (juce::ParameterID { outputTrimDb, 1 }, "Output Trim", Range (-24.0f, 24.0f, 0.1f), 0.0f, dbAttr));
 
     return { params.begin(), params.end() };
 }

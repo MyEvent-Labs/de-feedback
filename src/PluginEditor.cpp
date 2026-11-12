@@ -41,7 +41,7 @@ DeFeedbackEditor::DeFeedbackEditor (DeFeedbackProcessor& processor)
     addAndMakeVisible (aboutButton_);
 
     // Protection mode.
-    addAndMakeVisible (modeControl_);
+    protectionPanel_.addAndMakeVisible (modeControl_);
     if (auto* modeParam = proc_.apvts.getParameter (parameters::mode))
     {
         modeAttachment_ = std::make_unique<juce::ParameterAttachment> (*modeParam,
@@ -51,36 +51,36 @@ DeFeedbackEditor::DeFeedbackEditor (DeFeedbackProcessor& processor)
     }
 
     // Protection knobs.
-    configureKnob (strengthSlider_, strengthLabel_, "STRENGTH", strengthAttach_, parameters::strength);
-    configureKnob (sensitivitySlider_, sensitivityLabel_, "SENSITIVITY", sensitivityAttach_, parameters::sensitivity);
-    configureKnob (maxCutSlider_, maxCutLabel_, "MAX CUT", maxCutAttach_, parameters::maxCutDb);
-    configureKnob (recoverySlider_, recoveryLabel_, "RECOVERY", recoveryAttach_, parameters::recoverySeconds);
+    configureKnob (protectionPanel_, strengthSlider_, strengthLabel_, "STRENGTH", strengthAttach_, parameters::strength);
+    configureKnob (protectionPanel_, sensitivitySlider_, sensitivityLabel_, "SENSITIVITY", sensitivityAttach_, parameters::sensitivity);
+    configureKnob (protectionPanel_, maxCutSlider_, maxCutLabel_, "MAX CUT", maxCutAttach_, parameters::maxCutDb);
+    configureKnob (protectionPanel_, recoverySlider_, recoveryLabel_, "RECOVERY", recoveryAttach_, parameters::recoverySeconds);
 
     // Output knobs.
-    configureKnob (inputTrimSlider_, inputTrimLabel_, "IN TRIM", inputTrimAttach_, parameters::inputTrimDb);
-    configureKnob (outputTrimSlider_, outputTrimLabel_, "OUT TRIM", outputTrimAttach_, parameters::outputTrimDb);
+    configureKnob (outputPanel_, inputTrimSlider_, inputTrimLabel_, "IN TRIM", inputTrimAttach_, parameters::inputTrimDb);
+    configureKnob (outputPanel_, outputTrimSlider_, outputTrimLabel_, "OUT TRIM", outputTrimAttach_, parameters::outputTrimDb);
 
     stereoLinkAttach_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (proc_.apvts, parameters::stereoLink, stereoLinkButton_);
     stereoLinkButton_.setClickingTogglesState (true);
-    addAndMakeVisible (stereoLinkButton_);
+    outputPanel_.addAndMakeVisible (stereoLinkButton_);
 
     // Advanced knobs.
-    configureKnob (minFreqSlider_, minFreqLabel_, "MIN FREQ", minFreqAttach_, parameters::minFrequencyHz);
-    configureKnob (maxFreqSlider_, maxFreqLabel_, "MAX FREQ", maxFreqAttach_, parameters::maxFrequencyHz);
-    configureKnob (maxNotchesSlider_, maxNotchesLabel_, "NOTCHES", maxNotchesAttach_, parameters::maxNotches);
-    configureKnob (qBiasSlider_, qBiasLabel_, "Q BIAS", qBiasAttach_, parameters::qBias);
+    configureKnob (advancedPanel_, minFreqSlider_, minFreqLabel_, "MIN FREQ", minFreqAttach_, parameters::minFrequencyHz);
+    configureKnob (advancedPanel_, maxFreqSlider_, maxFreqLabel_, "MAX FREQ", maxFreqAttach_, parameters::maxFrequencyHz);
+    configureKnob (advancedPanel_, maxNotchesSlider_, maxNotchesLabel_, "NOTCHES", maxNotchesAttach_, parameters::maxNotches);
+    configureKnob (advancedPanel_, qBiasSlider_, qBiasLabel_, "Q BIAS", qBiasAttach_, parameters::qBias);
 
     // Actions.
     freezeAttach_ = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (proc_.apvts, parameters::freeze, freezeButton_);
     freezeButton_.setClickingTogglesState (true);
-    addAndMakeVisible (freezeButton_);
+    actionsPanel_.addAndMakeVisible (freezeButton_);
 
     clearButton_.onClick = [this] { proc_.requestClearNotches(); };
-    addAndMakeVisible (clearButton_);
+    actionsPanel_.addAndMakeVisible (clearButton_);
 
     advancedButton_.setClickingTogglesState (true);
     advancedButton_.onClick = [this] { advancedVisible_ = advancedButton_.getToggleState(); rebuildAdvanced(); resized(); };
-    addAndMakeVisible (advancedButton_);
+    actionsPanel_.addAndMakeVisible (advancedButton_);
 
     statusLabel_.setFont (DeFeedbackLookAndFeel::typeface (11.0f));
     statusLabel_.setColour (juce::Label::textColourId, Palette::textDim);
@@ -97,7 +97,7 @@ DeFeedbackEditor::~DeFeedbackEditor()
     setLookAndFeel (nullptr);
 }
 
-void DeFeedbackEditor::configureKnob (juce::Slider& slider, juce::Label& label, const juce::String& name,
+void DeFeedbackEditor::configureKnob (juce::Component& parent, juce::Slider& slider, juce::Label& label, const juce::String& name,
                                       std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>& attachmentPtr,
                                       const juce::String& paramId)
 {
@@ -105,26 +105,34 @@ void DeFeedbackEditor::configureKnob (juce::Slider& slider, juce::Label& label, 
     slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 74, 15);
     slider.setColour (juce::Slider::textBoxTextColourId, Palette::text);
     slider.setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
-    addAndMakeVisible (slider);
+    parent.addAndMakeVisible (slider);
 
     label.setText (name, juce::dontSendNotification);
     label.setJustificationType (juce::Justification::centred);
     label.setFont (DeFeedbackLookAndFeel::typeface (10.0f, true));
     label.setColour (juce::Label::textColourId, Palette::textDim);
-    addAndMakeVisible (label);
+    parent.addAndMakeVisible (label);
 
     attachmentPtr = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (proc_.apvts, paramId, slider);
+
+    // Show the parameter's own formatted text (with unit), e.g. "9.0 dB".
+    if (auto* param = proc_.apvts.getParameter (paramId))
+    {
+        const auto unit = param->getLabel();
+        slider.textFromValueFunction = [param, unit] (double v)
+        {
+            const auto value = param->getText (param->convertTo0to1 ((float) v), 0);
+            return unit.isEmpty() ? value : value + " " + unit;
+        };
+        slider.valueFromTextFunction = [param] (const juce::String& t) { return (double) param->convertFrom0to1 (param->getValueForText (t)); };
+        slider.updateText();
+    }
 }
 
 void DeFeedbackEditor::rebuildAdvanced()
 {
+    // Children live inside the panel, so hiding it hides them too.
     advancedPanel_.setVisible (advancedVisible_);
-
-    for (auto* c : { (juce::Component*) &minFreqSlider_, (juce::Component*) &maxFreqSlider_,
-                     (juce::Component*) &maxNotchesSlider_, (juce::Component*) &qBiasSlider_,
-                     (juce::Component*) &minFreqLabel_, (juce::Component*) &maxFreqLabel_,
-                     (juce::Component*) &maxNotchesLabel_, (juce::Component*) &qBiasLabel_ })
-        c->setVisible (advancedVisible_);
 }
 
 void DeFeedbackEditor::timerCallback()

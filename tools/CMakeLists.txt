@@ -66,3 +66,32 @@ target_compile_definitions(defeedback_quality PRIVATE
     JUCE_STANDALONE_APPLICATION=1
     JUCE_USE_CURL=0
     JUCE_WEB_BROWSER=0)
+
+juce_add_console_app(defeedback_screenshot
+    PRODUCT_NAME "De-Feedback Screenshot Tool")
+
+target_sources(defeedback_screenshot PRIVATE
+    screenshot/Main.cpp
+    ${CMAKE_SOURCE_DIR}/src/PluginProcessor.cpp
+    ${CMAKE_SOURCE_DIR}/src/PluginEditor.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/LookAndFeel.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/SpectrumView.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/Meter.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/NotchDisplay.cpp)
+
+target_include_directories(defeedback_screenshot PRIVATE ${CMAKE_SOURCE_DIR}/src)
+
+target_link_libraries(defeedback_screenshot
+    PRIVATE
+        defeedback_core
+        juce::juce_audio_utils
+        juce::juce_gui_extra
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_lto_flags)
+
+target_compile_definitions(defeedback_screenshot PRIVATE
+    JUCE_STANDALONE_APPLICATION=1
+    JUCE_USE_CURL=0
+    JUCE_WEB_BROWSER=0
+    JUCE_DISPLAY_SPLASH_SCREEN=0
+    JucePlugin_Name="MyEvent Labs De-Feedback")
